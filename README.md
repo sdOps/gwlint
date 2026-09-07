@@ -22,7 +22,7 @@ Flags a `BackendTrafficPolicy` with no active or passive health check configured
 A policy covers a route either by targeting it directly, or by targeting the `Gateway` the route is attached to via `parentRefs`: Gateway API's policy attachment model applies a Gateway-level policy to every route on that Gateway by default, and this check follows that same resolution, since a shared Gateway-level policy with no health check is at least as common in practice as a route-level one.
 
 **Why this check exists.** An FQDN-based backend endpoint puts Envoy Gateway on the same DNS-resolving cluster path the legacy Envoy `STRICT_DNS` cluster type used: the upstream address resolves at startup, not from a static IP.
-This check is based on a real incident: a cold-start DNS resolution gap on FQDN-backed SSO routes caused 503s before the name had resolved, with no health check in place to route around the gap.
+This check is based on a real incident: a cold-start DNS resolution gap on an FQDN-backed route caused 503s before the name had resolved, with no health check in place to route around the gap.
 The fix in that incident, and the remediation this check recommends, is an active or passive health check on the `BackendTrafficPolicy`, so a request has somewhere else to go while the name is still resolving.
 
 **What it does not cover (known limitations for this pass):**

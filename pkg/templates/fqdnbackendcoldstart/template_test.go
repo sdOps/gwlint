@@ -41,7 +41,7 @@ func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bo
 		parentRefs = []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(parentGateway)}}
 	}
 	route := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: "sso-route", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "partner-api-route", Namespace: "default"},
 		Spec: gatewayv1.HTTPRouteSpec{
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: parentRefs},
 			Rules: []gatewayv1.HTTPRouteRule{
@@ -52,7 +52,7 @@ func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bo
 								BackendObjectReference: gatewayv1.BackendObjectReference{
 									Group: grpPtr(gatewayv1.Group(egv1a1.GroupName)),
 									Kind:  kindPtr(gatewayv1.Kind(egv1a1.KindBackend)),
-									Name:  "sso-upstream",
+									Name:  "partner-api-upstream",
 								},
 							},
 						},
@@ -62,14 +62,14 @@ func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bo
 		},
 	}
 	route.SetGroupVersionKind(schema.GroupVersion{Group: gatewayv1.GroupName, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"))
-	s.ctx.AddObject("sso-route", route)
+	s.ctx.AddObject("partner-api-route", route)
 
 	backend := &egv1a1.Backend{
-		ObjectMeta: metav1.ObjectMeta{Name: "sso-upstream", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "partner-api-upstream", Namespace: "default"},
 	}
 	if fqdnBackend {
 		backend.Spec.Endpoints = []egv1a1.BackendEndpoint{
-			{FQDN: &egv1a1.FQDNEndpoint{Hostname: "sso.example-idp.com", Port: 443}},
+			{FQDN: &egv1a1.FQDNEndpoint{Hostname: "partner-api.example.com", Port: 443}},
 		}
 	} else {
 		ip := "10.0.0.1"
@@ -78,16 +78,16 @@ func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bo
 		}
 	}
 	backend.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackend))
-	s.ctx.AddObject("sso-upstream", backend)
+	s.ctx.AddObject("partner-api-upstream", backend)
 }
 
 func (s *FQDNBackendColdStartTestSuite) addPolicy(healthCheck *egv1a1.HealthCheck) {
-	s.addPolicyTargeting(healthCheck, "HTTPRoute", "sso-route")
+	s.addPolicyTargeting(healthCheck, "HTTPRoute", "partner-api-route")
 }
 
 func (s *FQDNBackendColdStartTestSuite) addPolicyTargeting(healthCheck *egv1a1.HealthCheck, targetKind gatewayv1.Kind, targetName gatewayv1.ObjectName) {
 	policy := &egv1a1.BackendTrafficPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "sso-route-policy", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "partner-api-route-policy", Namespace: "default"},
 		Spec: egv1a1.BackendTrafficPolicySpec{
 			PolicyTargetReferences: egv1a1.PolicyTargetReferences{
 				TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
@@ -104,7 +104,7 @@ func (s *FQDNBackendColdStartTestSuite) addPolicyTargeting(healthCheck *egv1a1.H
 		},
 	}
 	policy.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackendTrafficPolicy))
-	s.ctx.AddObject("sso-route-policy", policy)
+	s.ctx.AddObject("partner-api-route-policy", policy)
 }
 
 func (s *FQDNBackendColdStartTestSuite) TestFlagsFQDNBackendWithNoHealthCheck() {
@@ -114,9 +114,9 @@ func (s *FQDNBackendColdStartTestSuite) TestFlagsFQDNBackendWithNoHealthCheck() 
 	s.Validate(s.ctx, []templates.TestCase{
 		{
 			Diagnostics: map[string][]diagnostic.Diagnostic{
-				"sso-route-policy": {{
-					Message: `BackendTrafficPolicy has no health check, but targets HTTPRoute "sso-route", ` +
-						`which routes to Backend "sso-upstream" with FQDN endpoint "sso.example-idp.com"; ` +
+				"partner-api-route-policy": {{
+					Message: `BackendTrafficPolicy has no health check, but targets HTTPRoute "partner-api-route", ` +
+						`which routes to Backend "partner-api-upstream" with FQDN endpoint "partner-api.example.com"; ` +
 						`this backend resolves via DNS at startup and can 503 before the name resolves`,
 				}},
 			},
@@ -149,10 +149,10 @@ func (s *FQDNBackendColdStartTestSuite) TestFlagsGatewayLevelPolicyCoveringFQDNR
 	s.Validate(s.ctx, []templates.TestCase{
 		{
 			Diagnostics: map[string][]diagnostic.Diagnostic{
-				"sso-route-policy": {{
+				"partner-api-route-policy": {{
 					Message: `BackendTrafficPolicy has no health check, but targets Gateway "public-gateway", ` +
-						`whose attached HTTPRoute "sso-route", which routes to Backend "sso-upstream" with ` +
-						`FQDN endpoint "sso.example-idp.com"; this backend resolves via DNS at startup and ` +
+						`whose attached HTTPRoute "partner-api-route", which routes to Backend "partner-api-upstream" with ` +
+						`FQDN endpoint "partner-api.example.com"; this backend resolves via DNS at startup and ` +
 						`can 503 before the name resolves`,
 				}},
 			},

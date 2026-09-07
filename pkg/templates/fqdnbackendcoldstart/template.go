@@ -5,7 +5,7 @@
 // used, so a request that arrives before the name resolves 503s, and with
 // no health check there is nothing to route around it during that window.
 // This mirrors a real incident: a cold-start DNS resolution gap caused 503s
-// on SSO routes. See the README for the incident writeup and remediation.
+// on FQDN-backed routes. See the README for the incident writeup and remediation.
 package fqdnbackendcoldstart
 
 import (
