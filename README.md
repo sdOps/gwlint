@@ -18,7 +18,8 @@ See `INSTRUCTION.md` for the full project brief, including a Phase 3 plan to val
 
 ### `fqdn-backend-cold-start`
 
-Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy targets an `HTTPRoute` or `GRPCRoute` whose `backendRefs` point at an Envoy Gateway `Backend` object with an FQDN endpoint (`spec.endpoints[].fqdn`).
+Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy covers an `HTTPRoute` or `GRPCRoute` whose `backendRefs` point at an Envoy Gateway `Backend` object with an FQDN endpoint (`spec.endpoints[].fqdn`).
+A policy covers a route either by targeting it directly, or by targeting the `Gateway` the route is attached to via `parentRefs`: Gateway API's policy attachment model applies a Gateway-level policy to every route on that Gateway by default, and this check follows that same resolution, since a shared Gateway-level policy with no health check is at least as common in practice as a route-level one.
 
 **Why this check exists.** An FQDN-based backend endpoint puts Envoy Gateway on the same DNS-resolving cluster path the legacy Envoy `STRICT_DNS` cluster type used: the upstream address resolves at startup, not from a static IP.
 This check is based on a real incident: a cold-start DNS resolution gap on FQDN-backed SSO routes caused 503s before the name had resolved, with no health check in place to route around the gap.
@@ -26,10 +27,11 @@ The fix in that incident, and the remediation this check recommends, is an activ
 
 **What it does not cover (known limitations for this pass):**
 
-- Only `targetRef`/`targetRefs` naming an `HTTPRoute` or `GRPCRoute` directly are followed.
-  A `BackendTrafficPolicy` targeting a `Gateway` (which would require resolving every route attached to that Gateway via `parentRefs`) is not yet covered.
+- `targetRef`/`targetRefs` naming an `HTTPRoute` or `GRPCRoute` are followed directly, and a `targetRef`/`targetRefs` naming a `Gateway` is resolved to every route whose `parentRefs` attach to that Gateway.
+  `ListenerSet` targets (a newer, less common attachment point) and `TargetSelectors` (label-based targeting) are not resolved.
 - Cross-namespace `backendRef`s are matched by namespace/name only; `ReferenceGrant` validity is not checked (that's a separate Phase 2 check).
-- `TargetSelectors` (label-based targeting) are not followed.
+- A health check being present does not mean the risk is actually closed: for a `Backend` with only one FQDN endpoint and no redundancy, ejecting or failing that endpoint has nowhere else to route to.
+  The check only verifies that a health check exists, not that it provides real failover; a health check on a single-endpoint backend mainly changes the failure mode from slow to fast, it doesn't add availability.
 
 **Remediation:** add a `healthCheck.active` or `healthCheck.passive` block to the `BackendTrafficPolicy`, or switch the `Backend` to an IP-based endpoint if the FQDN target isn't actually required.
 See the [Envoy Gateway health check docs](https://gateway.envoyproxy.io/docs/api/extension_types/#healthcheck).
@@ -45,7 +47,7 @@ gwlint templates list
 Output format matches kube-linter's own: plain text by default, `--format json` for machine-readable output.
 Exit code is non-zero when lint errors are found, matching kube-linter's convention.
 
-See `examples/failing` and `examples/passing` for sample manifests exercising the `fqdn-backend-cold-start` check.
+See `examples/failing` and `examples/passing` for sample manifests exercising the `fqdn-backend-cold-start` check via a direct `HTTPRoute` targetRef, and `examples/failing-gateway-level` for the same check triggered via a `Gateway`-level policy instead.
 
 ## Building
 

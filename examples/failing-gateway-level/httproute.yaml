@@ -1,0 +1,18 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: sso-route
+  namespace: gateway
+spec:
+  parentRefs:
+    - name: gateway-public
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /sso
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: sso-upstream
+          port: 443

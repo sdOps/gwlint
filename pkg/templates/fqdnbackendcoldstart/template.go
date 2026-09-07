@@ -15,6 +15,7 @@ import (
 	"golang.stackrox.io/kube-linter/pkg/check"
 	"golang.stackrox.io/kube-linter/pkg/config"
 	"golang.stackrox.io/kube-linter/pkg/diagnostic"
+	"golang.stackrox.io/kube-linter/pkg/k8sutil"
 	"golang.stackrox.io/kube-linter/pkg/lintcontext"
 	"golang.stackrox.io/kube-linter/pkg/templates"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -53,29 +54,28 @@ func checkFunc(lintCtx lintcontext.LintContext, object lintcontext.Object) []dia
 
 	var diagnostics []diagnostic.Diagnostic
 	for _, ref := range policyTargetRefs(policy) {
-		if !isRouteKind(ref.Kind) {
-			continue
-		}
-		for _, backendRef := range routeBackendRefs(lintCtx, policy.Namespace, string(ref.Name), ref.Kind) {
-			if !isEnvoyGatewayBackendRef(backendRef) {
-				continue
-			}
-			backendNamespace := policy.Namespace
-			if backendRef.Namespace != nil {
-				backendNamespace = string(*backendRef.Namespace)
-			}
-			backend := findBackend(lintCtx, backendNamespace, string(backendRef.Name))
-			if backend == nil {
-				continue
-			}
-			if hostname, ok := fqdnHostname(backend); ok {
-				diagnostics = append(diagnostics, diagnostic.Diagnostic{
-					Message: fmt.Sprintf(
-						"BackendTrafficPolicy has no health check, but targets %s %q, which routes to "+
-							"Backend %q with FQDN endpoint %q; this backend resolves via DNS at startup "+
-							"and can 503 before the name resolves",
-						ref.Kind, ref.Name, backend.Name, hostname),
-				})
+		for _, route := range resolveRoutes(lintCtx, policy.Namespace, ref) {
+			for _, backendRef := range route.BackendRefs {
+				if !isEnvoyGatewayBackendRef(backendRef) {
+					continue
+				}
+				backendNamespace := policy.Namespace
+				if backendRef.Namespace != nil {
+					backendNamespace = string(*backendRef.Namespace)
+				}
+				backend := findBackend(lintCtx, backendNamespace, string(backendRef.Name))
+				if backend == nil {
+					continue
+				}
+				if hostname, ok := fqdnHostname(backend); ok {
+					diagnostics = append(diagnostics, diagnostic.Diagnostic{
+						Message: fmt.Sprintf(
+							"BackendTrafficPolicy has no health check, but targets %s, which routes to "+
+								"Backend %q with FQDN endpoint %q; this backend resolves via DNS at startup "+
+								"and can 503 before the name resolves",
+							describeTarget(ref, route), backend.Name, hostname),
+					})
+				}
 			}
 		}
 	}
@@ -106,46 +106,130 @@ func policyTargetRefs(policy *egv1a1.BackendTrafficPolicy) []targetRef {
 	return refs
 }
 
-// isRouteKind reports whether kind is a route kind this check can look up
-// backendRefs on directly. Gateway-kind and label-selector targets are not
-// followed: doing so requires resolving every route attached to a Gateway
-// via parentRefs, which is out of scope for this check.
-func isRouteKind(kind gatewayv1.Kind) bool {
-	return kind == "HTTPRoute" || kind == "GRPCRoute"
+// resolvedRoute is an HTTPRoute or GRPCRoute this check has resolved a
+// BackendTrafficPolicy's targetRef down to, along with the backendRefs to
+// inspect for FQDN-endpoint Backends.
+type resolvedRoute struct {
+	Kind        gatewayv1.Kind
+	Name        gatewayv1.ObjectName
+	BackendRefs []gatewayv1.BackendRef
 }
 
-// routeBackendRefs returns the backendRefs of the named HTTPRoute or
-// GRPCRoute in the given namespace.
-func routeBackendRefs(lintCtx lintcontext.LintContext, namespace, name string, kind gatewayv1.Kind) []gatewayv1.BackendRef {
-	var refs []gatewayv1.BackendRef
+// resolveRoutes returns the routes a BackendTrafficPolicy's targetRef
+// actually covers. A route-kind targetRef (HTTPRoute/GRPCRoute) resolves to
+// that route directly. A Gateway-kind targetRef resolves to every route
+// attached to that Gateway via parentRefs, since a Gateway-level policy
+// applies to all of them by default (Gateway API's policy attachment
+// hierarchy). TargetSelectors and ListenerSet targets are not resolved:
+// doing so needs its own investigation and is left for a follow-on check.
+func resolveRoutes(lintCtx lintcontext.LintContext, policyNamespace string, ref targetRef) []resolvedRoute {
+	switch ref.Kind {
+	case "HTTPRoute", "GRPCRoute":
+		obj := findRoute(lintCtx, policyNamespace, string(ref.Name), ref.Kind)
+		if obj == nil {
+			return nil
+		}
+		return []resolvedRoute{*obj}
+	case "Gateway":
+		return routesAttachedToGateway(lintCtx, policyNamespace, string(ref.Name))
+	default:
+		return nil
+	}
+}
+
+func findRoute(lintCtx lintcontext.LintContext, namespace, name string, kind gatewayv1.Kind) *resolvedRoute {
 	for _, obj := range lintCtx.Objects() {
 		if obj.K8sObject.GetNamespace() != namespace || obj.K8sObject.GetName() != name {
 			continue
 		}
-		switch kind {
-		case "HTTPRoute":
-			route, ok := obj.K8sObject.(*gatewayv1.HTTPRoute)
-			if !ok {
-				continue
-			}
-			for _, rule := range route.Spec.Rules {
-				for _, br := range rule.BackendRefs {
-					refs = append(refs, br.BackendRef)
-				}
-			}
-		case "GRPCRoute":
-			route, ok := obj.K8sObject.(*gatewayv1.GRPCRoute)
-			if !ok {
-				continue
-			}
-			for _, rule := range route.Spec.Rules {
-				for _, br := range rule.BackendRefs {
-					refs = append(refs, br.BackendRef)
-				}
-			}
+		if route, ok := asResolvedRoute(obj.K8sObject); ok && route.Kind == kind {
+			return &route
 		}
 	}
-	return refs
+	return nil
+}
+
+// routesAttachedToGateway returns every HTTPRoute/GRPCRoute in lintCtx whose
+// parentRefs name the given Gateway.
+func routesAttachedToGateway(lintCtx lintcontext.LintContext, gatewayNamespace, gatewayName string) []resolvedRoute {
+	var routes []resolvedRoute
+	for _, obj := range lintCtx.Objects() {
+		route, ok := asResolvedRoute(obj.K8sObject)
+		if !ok {
+			continue
+		}
+		parentRefs, routeNamespace := parentRefsOf(obj.K8sObject)
+		if parentRefsMatchGateway(parentRefs, routeNamespace, gatewayNamespace, gatewayName) {
+			routes = append(routes, route)
+		}
+	}
+	return routes
+}
+
+func parentRefsMatchGateway(parentRefs []gatewayv1.ParentReference, routeNamespace, gatewayNamespace, gatewayName string) bool {
+	for _, p := range parentRefs {
+		if p.Group != nil && string(*p.Group) != gatewayv1.GroupName {
+			continue
+		}
+		if p.Kind != nil && string(*p.Kind) != "Gateway" {
+			continue
+		}
+		ns := routeNamespace
+		if p.Namespace != nil {
+			ns = string(*p.Namespace)
+		}
+		if ns == gatewayNamespace && string(p.Name) == gatewayName {
+			return true
+		}
+	}
+	return false
+}
+
+// asResolvedRoute extracts the kind, name, and backendRefs from obj if it is
+// an HTTPRoute or GRPCRoute, and reports whether obj was one of those kinds.
+func asResolvedRoute(obj k8sutil.Object) (resolvedRoute, bool) {
+	switch route := obj.(type) {
+	case *gatewayv1.HTTPRoute:
+		var refs []gatewayv1.BackendRef
+		for _, rule := range route.Spec.Rules {
+			for _, br := range rule.BackendRefs {
+				refs = append(refs, br.BackendRef)
+			}
+		}
+		return resolvedRoute{Kind: "HTTPRoute", Name: gatewayv1.ObjectName(route.Name), BackendRefs: refs}, true
+	case *gatewayv1.GRPCRoute:
+		var refs []gatewayv1.BackendRef
+		for _, rule := range route.Spec.Rules {
+			for _, br := range rule.BackendRefs {
+				refs = append(refs, br.BackendRef)
+			}
+		}
+		return resolvedRoute{Kind: "GRPCRoute", Name: gatewayv1.ObjectName(route.Name), BackendRefs: refs}, true
+	default:
+		return resolvedRoute{}, false
+	}
+}
+
+func parentRefsOf(obj k8sutil.Object) ([]gatewayv1.ParentReference, string) {
+	switch route := obj.(type) {
+	case *gatewayv1.HTTPRoute:
+		return route.Spec.ParentRefs, route.Namespace
+	case *gatewayv1.GRPCRoute:
+		return route.Spec.ParentRefs, route.Namespace
+	default:
+		return nil, ""
+	}
+}
+
+// describeTarget renders the policy's targetRef for the diagnostic message.
+// For a Gateway-kind targetRef, the actual route that carries the FQDN
+// backend is also named, since the policy itself never mentions it.
+func describeTarget(ref targetRef, route resolvedRoute) string {
+	target := fmt.Sprintf("%s %q", ref.Kind, ref.Name)
+	if ref.Kind == "Gateway" {
+		target = fmt.Sprintf("%s, whose attached %s %q", target, route.Kind, route.Name)
+	}
+	return target
 }
 
 // isEnvoyGatewayBackendRef reports whether ref points at an Envoy Gateway

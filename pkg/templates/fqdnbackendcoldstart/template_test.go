@@ -32,9 +32,18 @@ func kindPtr(k gatewayv1.Kind) *gatewayv1.Kind  { return &k }
 func grpPtr(g gatewayv1.Group) *gatewayv1.Group { return &g }
 
 func (s *FQDNBackendColdStartTestSuite) addRoute(fqdnBackend bool) {
+	s.addRouteWithParentGateway(fqdnBackend, "")
+}
+
+func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bool, parentGateway string) {
+	var parentRefs []gatewayv1.ParentReference
+	if parentGateway != "" {
+		parentRefs = []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(parentGateway)}}
+	}
 	route := &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: "sso-route", Namespace: "default"},
 		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: parentRefs},
 			Rules: []gatewayv1.HTTPRouteRule{
 				{
 					BackendRefs: []gatewayv1.HTTPBackendRef{
@@ -73,6 +82,10 @@ func (s *FQDNBackendColdStartTestSuite) addRoute(fqdnBackend bool) {
 }
 
 func (s *FQDNBackendColdStartTestSuite) addPolicy(healthCheck *egv1a1.HealthCheck) {
+	s.addPolicyTargeting(healthCheck, "HTTPRoute", "sso-route")
+}
+
+func (s *FQDNBackendColdStartTestSuite) addPolicyTargeting(healthCheck *egv1a1.HealthCheck, targetKind gatewayv1.Kind, targetName gatewayv1.ObjectName) {
 	policy := &egv1a1.BackendTrafficPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "sso-route-policy", Namespace: "default"},
 		Spec: egv1a1.BackendTrafficPolicySpec{
@@ -81,8 +94,8 @@ func (s *FQDNBackendColdStartTestSuite) addPolicy(healthCheck *egv1a1.HealthChec
 					{
 						LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
 							Group: gatewayv1.GroupName,
-							Kind:  "HTTPRoute",
-							Name:  "sso-route",
+							Kind:  targetKind,
+							Name:  targetName,
 						},
 					},
 				},
@@ -123,6 +136,33 @@ func (s *FQDNBackendColdStartTestSuite) TestPassesWhenHealthCheckConfigured() {
 func (s *FQDNBackendColdStartTestSuite) TestPassesWhenBackendIsNotFQDN() {
 	s.addRoute(false)
 	s.addPolicy(nil)
+
+	s.Validate(s.ctx, []templates.TestCase{
+		{Diagnostics: map[string][]diagnostic.Diagnostic{}},
+	})
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestFlagsGatewayLevelPolicyCoveringFQDNRoute() {
+	s.addRouteWithParentGateway(true, "gateway-public")
+	s.addPolicyTargeting(nil, "Gateway", "gateway-public")
+
+	s.Validate(s.ctx, []templates.TestCase{
+		{
+			Diagnostics: map[string][]diagnostic.Diagnostic{
+				"sso-route-policy": {{
+					Message: `BackendTrafficPolicy has no health check, but targets Gateway "gateway-public", ` +
+						`whose attached HTTPRoute "sso-route", which routes to Backend "sso-upstream" with ` +
+						`FQDN endpoint "sso.example-idp.com"; this backend resolves via DNS at startup and ` +
+						`can 503 before the name resolves`,
+				}},
+			},
+		},
+	})
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestPassesWhenRouteNotAttachedToTargetedGateway() {
+	s.addRouteWithParentGateway(true, "some-other-gateway")
+	s.addPolicyTargeting(nil, "Gateway", "gateway-public")
 
 	s.Validate(s.ctx, []templates.TestCase{
 		{Diagnostics: map[string][]diagnostic.Diagnostic{}},

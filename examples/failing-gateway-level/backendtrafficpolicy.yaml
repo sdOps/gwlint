@@ -1,0 +1,31 @@
+# Modeled on a real Gateway-level BackendTrafficPolicy, with the
+# healthCheck block removed to show the gap this check is meant to catch:
+# a shared, Gateway-wide policy with no health check at all, covering
+# routes that back onto FQDN endpoints.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: gateway-public-retry
+  namespace: gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gateway-public
+  retry:
+    numRetries: 3
+    perRetry:
+      backOff:
+        baseInterval: 100ms
+        maxInterval: 500ms
+    retryOn:
+      httpStatusCodes:
+        - 408
+      triggers:
+        - 5xx
+        - reset
+        - connect-failure
+        - retriable-status-codes
+  timeout:
+    http:
+      connectionIdleTimeout: 15s

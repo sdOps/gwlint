@@ -1,0 +1,10 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: sso-upstream
+  namespace: gateway
+spec:
+  endpoints:
+    - fqdn:
+        hostname: sso.example-idp.com
+        port: 443
