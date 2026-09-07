@@ -47,7 +47,13 @@ gwlint templates list
 Output format matches kube-linter's own: plain text by default, `--format json` for machine-readable output.
 Exit code is non-zero when lint errors are found, matching kube-linter's convention.
 
-See `examples/failing` and `examples/passing` for sample manifests exercising the `fqdn-backend-cold-start` check via a direct `HTTPRoute` targetRef, and `examples/failing-gateway-level` for the same check triggered via a `Gateway`-level policy instead.
+See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario:
+
+- `examples/failing/direct-route`: policy targets the `HTTPRoute` directly, no health check, FQDN backend.
+- `examples/failing/gateway-level`: policy targets the `Gateway`, no health check, a route attached to that Gateway has an FQDN backend.
+- `examples/passing/health-check-configured`: same as `direct-route`, but with a passive health check configured.
+- `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
+- `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.
 
 ## Building
 

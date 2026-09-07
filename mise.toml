@@ -27,6 +27,5 @@ description = "Run the built gwlint binary against the sample manifests"
 depends = ["build"]
 run = """
 ./gwlint lint ./examples/failing || true
-./gwlint lint ./examples/failing-gateway-level || true
 ./gwlint lint ./examples/passing
 """
