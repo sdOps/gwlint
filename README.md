@@ -62,16 +62,41 @@ kube-linter's own `lintcontext` scopes each object to the directory it was loade
 gwlint's `lint` command deliberately merges every discovered context into one before running checks, so `gwlint lint <path1> <path2> ...` correlates objects across however many directories, Helm charts, or Helm releases they came from.
 This matters because `helm template --output-dir` (and `helmfile template --output-dir`) both write one subdirectory per release, so even a single repo's rendered output is typically several directories deep; merging means you can point gwlint at the top of that output tree without flattening it by hand first.
 
-A practical pattern for two separate repos, each managed by Helmfile with per-environment values:
+**Plain Helm, one chart per repo.** Render each repo's chart to its own output directory with the same values file (or `--set` overrides) you'd actually deploy with, then point gwlint at both directories in one call:
 
 ```sh
-helmfile -e prod template --skip-deps --output-dir /tmp/render/gwapi   # in the Gateway/policy repo
-helmfile -e prod template --skip-deps --output-dir /tmp/render/routes  # in the routes repo, matching environment
-gwlint lint /tmp/render/gwapi /tmp/render/routes
+helm template gateway-release  ./chart -f values-prod.yaml --output-dir /tmp/render/gateway   # in the Gateway/policy repo
+helm template routes-release   ./chart -f values-prod.yaml --output-dir /tmp/render/routes    # in the routes repo, same environment's values
+
+gwlint lint /tmp/render/gateway /tmp/render/routes
 ```
 
+**Helmfile, environment-driven values across repos.** If each repo picks its manifests via a Helmfile environment rather than a single values file, render the same environment from each repo before linting:
+
+```sh
+helmfile -e production template --skip-deps --output-dir /tmp/render/gateway   # in the Gateway/policy repo
+helmfile -e production template --skip-deps --output-dir /tmp/render/routes   # in the routes repo, matching environment
+
+gwlint lint /tmp/render/gateway /tmp/render/routes
+```
+
+**More than two repos.** The pattern is the same regardless of count; a loop keeps it from growing unwieldy as more route-owning repos show up:
+
+```sh
+render_dir=/tmp/render
+rm -rf "$render_dir" && mkdir -p "$render_dir"
+
+for repo in gateway-repo routes-repo-a routes-repo-b; do
+  (cd "$repo" && helmfile -e production template --skip-deps --output-dir "$render_dir/$repo")
+done
+
+gwlint lint "$render_dir"/*
+```
+
+That last line expands to one `gwlint lint` call listing every repo's rendered output directory, correlated as if it were all one cluster's manifests.
+
 One caveat this implies: object identity (namespace + name + kind) must be genuinely unique across everything passed to one `gwlint lint` invocation, the same way it would need to be in a real cluster.
-Linting two genuinely unrelated environments or clusters together in one invocation (rather than one repo's chart split across directories) isn't a supported use case, since a coincidental name collision between them would be treated as a real match.
+Linting two genuinely unrelated environments or clusters together in one invocation (rather than one real deployment's chart split across repos) isn't a supported use case, since a coincidental name collision between them would be treated as a real match.
 
 See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario:
 
