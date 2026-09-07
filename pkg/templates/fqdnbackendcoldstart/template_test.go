@@ -81,6 +81,32 @@ func (s *FQDNBackendColdStartTestSuite) addRouteWithParentGateway(fqdnBackend bo
 	s.ctx.AddObject("partner-api-upstream", backend)
 }
 
+// addRouteWithServiceBackend adds a route whose backendRef has no group/kind
+// override, meaning it defaults to a core Service rather than an Envoy
+// Gateway Backend. No Backend object is added at all.
+func (s *FQDNBackendColdStartTestSuite) addRouteWithServiceBackend() {
+	route := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "partner-api-route", Namespace: "default"},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					BackendRefs: []gatewayv1.HTTPBackendRef{
+						{
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Name: "partner-api-service",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	route.SetGroupVersionKind(schema.GroupVersion{Group: gatewayv1.GroupName, Version: gatewayv1.GroupVersion.Version}.WithKind("HTTPRoute"))
+	s.ctx.AddObject("partner-api-route", route)
+}
+
 func (s *FQDNBackendColdStartTestSuite) addPolicy(healthCheck *egv1a1.HealthCheck) {
 	s.addPolicyTargeting(healthCheck, "HTTPRoute", "partner-api-route")
 }
@@ -157,6 +183,15 @@ func (s *FQDNBackendColdStartTestSuite) TestFlagsGatewayLevelPolicyCoveringFQDNR
 				}},
 			},
 		},
+	})
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestPassesWhenBackendRefIsCoreService() {
+	s.addRouteWithServiceBackend()
+	s.addPolicy(nil)
+
+	s.Validate(s.ctx, []templates.TestCase{
+		{Diagnostics: map[string][]diagnostic.Diagnostic{}},
 	})
 }
 

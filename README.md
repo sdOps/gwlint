@@ -54,6 +54,7 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 - `examples/passing/health-check-configured`: same as `direct-route`, but with a passive health check configured.
 - `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
 - `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.
+- `examples/passing/service-backend`: no health check, but the route's `backendRef` is a plain core `Service` (the common case), not an Envoy Gateway `Backend`, so there's no FQDN endpoint to find.
 
 ## Building
 
