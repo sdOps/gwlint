@@ -16,4 +16,4 @@ spec:
             value: /partner-api
       backendRefs:
         - name: partner-api-service
-          port: 443
+          port: 80
