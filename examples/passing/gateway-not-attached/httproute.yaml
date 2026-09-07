@@ -1,4 +1,4 @@
-# Attached to "some-other-gateway", not the "gateway-public" the policy
+# Attached to "some-other-gateway", not the "public-gateway" the policy
 # below targets, so the policy's coverage never reaches this route.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
