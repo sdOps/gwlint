@@ -1,0 +1,31 @@
+[tools]
+go = "1.26.8"
+golangci-lint = "2.12.2"
+
+[tasks.build]
+description = "Build the gwlint binary"
+run = "go build -o gwlint ./cmd/gwlint"
+
+[tasks.test]
+description = "Run unit tests"
+run = "go test ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.check]
+description = "Run build, vet, test, and lint"
+depends = ["build", "vet", "test", "lint"]
+
+[tasks.lint-examples]
+description = "Run the built gwlint binary against the sample manifests"
+depends = ["build"]
+run = """
+./gwlint lint ./examples/failing || true
+./gwlint lint ./examples/passing
+"""

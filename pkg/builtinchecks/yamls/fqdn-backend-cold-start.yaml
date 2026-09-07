@@ -1,0 +1,7 @@
+name: "fqdn-backend-cold-start"
+description: "Flag BackendTrafficPolicies with no health check that cover a route whose backend resolves via FQDN, risking cold-start 503s before DNS resolves"
+remediation: "Add an active or passive health check to the BackendTrafficPolicy, or switch the Backend to an IP-based endpoint if the FQDN target is not required. See https://gateway.envoyproxy.io/docs/api/extension_types/#healthcheck for health check configuration."
+scope:
+  objectKinds:
+    - BackendTrafficPolicy
+template: "fqdn-backend-cold-start"

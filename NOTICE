@@ -1,0 +1,11 @@
+gwlint
+Copyright 2026 the gwlint authors
+
+This product includes software developed as part of the kube-linter project
+(https://github.com/stackrox/kube-linter), licensed under the Apache License,
+Version 2.0. kube-linter itself does not publish a NOTICE file; this notice
+is gwlint's own attribution for that dependency.
+
+gwlint is not an official kube-linter product and is not affiliated with or
+endorsed by the kube-linter project or Red Hat/StackRox. It is built using
+kube-linter's engine packages as a library dependency.
