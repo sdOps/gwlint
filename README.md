@@ -1,7 +1,7 @@
 # gwlint
 
 gwlint is a static analysis tool for Kubernetes Gateway API resources (`Gateway`, `HTTPRoute`, `GRPCRoute`, `ReferenceGrant`) and Envoy Gateway's own CRDs (`BackendTrafficPolicy`, `Backend`).
-It catches semantic misconfigurations that schema validators can't see: a route conflict, a missing health check, a DNS resolution mode that doesn't fit a given backend.
+It's for semantic misconfigurations that schema validators can't see: things a manifest can be perfectly valid and still get wrong, like a backend that resolves via DNS at startup with no health check to cover the gap.
 
 Schema validators like kubeconform confirm a manifest is structurally valid.
 Semantic linters like [kube-linter](https://github.com/stackrox/kube-linter) check things like "container runs as root," but have no Gateway API awareness (see [kube-linter#555](https://github.com/stackrox/kube-linter/issues/555), open since April 2023).
@@ -9,10 +9,15 @@ gwlint fills that gap.
 
 gwlint is built by importing kube-linter's own Go packages as a library and adding Gateway API and Envoy Gateway checks on top, so the check logic can be upstreamed into kube-linter later with minimal rework: same `check.Template` shape, same package-per-check layout, same registration pattern.
 
+## Status
+
+This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
+It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
+Route conflict detection, missing-`ReferenceGrant` detection, retry policy sanity, and missing passive health checks are planned next (Phase 2); see `INSTRUCTION.md` for the full backlog and a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific check set is further along.
+
 ## Scope
 
 This first pass covers core Gateway API resources plus Envoy Gateway's CRDs specifically, not every Gateway API implementation's vendor extensions.
-See `INSTRUCTION.md` for the full project brief, including a Phase 3 plan to validate the architecture against a second implementation (Istio is the leading candidate) once the Envoy-specific check set is further along.
 
 ## Checks
 
@@ -43,6 +48,7 @@ gwlint lint ./path/to/manifests
 gwlint lint --format json ./path/to/manifests
 gwlint lint ./gateway-chart-render ./routes-chart-render
 gwlint templates list
+gwlint version
 ```
 
 Output format matches kube-linter's own: plain text by default, `--format json` for machine-readable output.
@@ -75,6 +81,8 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 - `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
 - `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.
 - `examples/passing/service-backend`: no health check, but the route's `backendRef` is a plain core `Service` (the common case), not an Envoy Gateway `Backend`, so there's no FQDN endpoint to find.
+
+Each scenario can be linted on its own, or together (`gwlint lint ./examples/failing`, `./examples/passing`, or `./examples` for all of them at once): every route, backend, and policy name is kept unique across the whole tree specifically so aggregate runs don't cross-contaminate now that contexts are merged (see above).
 
 ## Building
 
