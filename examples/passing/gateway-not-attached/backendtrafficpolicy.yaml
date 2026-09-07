@@ -1,14 +1,14 @@
-# No health check, and targets Gateway "public-gateway" -- but no route in
+# No health check, and targets Gateway "checkout-gateway" -- but no route in
 # this manifest set is attached to that Gateway (see httproute.yaml), so
 # this policy never actually covers the FQDN-backed route below, and the
 # check correctly finds nothing.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
-  name: public-gateway-policy
+  name: checkout-gateway-policy
   namespace: default
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: public-gateway
+      name: checkout-gateway

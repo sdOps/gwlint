@@ -1,7 +1,7 @@
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
-  name: partner-api-upstream
+  name: shipping-api-upstream
   namespace: default
 spec:
   endpoints:

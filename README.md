@@ -41,11 +41,31 @@ See the [Envoy Gateway health check docs](https://gateway.envoyproxy.io/docs/api
 ```sh
 gwlint lint ./path/to/manifests
 gwlint lint --format json ./path/to/manifests
+gwlint lint ./gateway-chart-render ./routes-chart-render
 gwlint templates list
 ```
 
 Output format matches kube-linter's own: plain text by default, `--format json` for machine-readable output.
 Exit code is non-zero when lint errors are found, matching kube-linter's convention.
+
+### Linting across multiple charts, directories, or repos
+
+Gateway API resources are routinely authored across separate files: a platform team's Gateway and BackendTrafficPolicy chart, a different team's HTTPRoute chart, sometimes in entirely separate repos.
+kube-linter's own `lintcontext` scopes each object to the directory it was loaded from, so a check that needs to correlate a policy with the route it covers would silently see nothing if the two live in different directories, even when passed to the same `gwlint lint` invocation.
+
+gwlint's `lint` command deliberately merges every discovered context into one before running checks, so `gwlint lint <path1> <path2> ...` correlates objects across however many directories, Helm charts, or Helm releases they came from.
+This matters because `helm template --output-dir` (and `helmfile template --output-dir`) both write one subdirectory per release, so even a single repo's rendered output is typically several directories deep; merging means you can point gwlint at the top of that output tree without flattening it by hand first.
+
+A practical pattern for two separate repos, each managed by Helmfile with per-environment values:
+
+```sh
+helmfile -e prod template --skip-deps --output-dir /tmp/render/gwapi   # in the Gateway/policy repo
+helmfile -e prod template --skip-deps --output-dir /tmp/render/routes  # in the routes repo, matching environment
+gwlint lint /tmp/render/gwapi /tmp/render/routes
+```
+
+One caveat this implies: object identity (namespace + name + kind) must be genuinely unique across everything passed to one `gwlint lint` invocation, the same way it would need to be in a real cluster.
+Linting two genuinely unrelated environments or clusters together in one invocation (rather than one repo's chart split across directories) isn't a supported use case, since a coincidental name collision between them would be treated as a real match.
 
 See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario:
 
@@ -99,6 +119,9 @@ A few things kube-linter doesn't expose a way to extend from outside its own mod
 - **The `lint` CLI command.** kube-linter's own `lint` command hardcodes `lintcontext.CreateContexts` with no way to supply a custom decoder, so `pkg/command/lint` reimplements that command's flow.
   It reuses kube-linter's own output-formatting and flag-parsing helpers (`pkg/command/common`, and `ValidateAndPairFormatsOutputs`/`NewOutputDestination` from `pkg/command/lint`) everywhere they don't hardcode kube-linter's own decoder.
   `pkg/command/root` reuses kube-linter's own `templates` subcommand as-is, since it operates on the shared template registry and correctly lists only what gwlint has registered into it.
+- **Context merging.** kube-linter scopes each `LintContext` to the directory its files were loaded from, one per directory.
+  gwlint's checks need to correlate objects across files that are routinely split into separate directories, charts, or repos, so `pkg/command/lint`'s `mergeContexts` (see `merge.go`) combines every discovered context into one before checks run.
+  See "Linting across multiple charts, directories, or repos" above for why this matters and what it assumes.
 
 ## Licensing and attribution
 

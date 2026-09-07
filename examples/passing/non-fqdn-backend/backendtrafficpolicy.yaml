@@ -4,10 +4,10 @@
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
-  name: partner-api-route-policy
+  name: inventory-api-route-policy
   namespace: default
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: partner-api-route
+      name: inventory-api-route

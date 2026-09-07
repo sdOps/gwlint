@@ -93,6 +93,8 @@ func Command() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Merge every discovered context into one: see merge.go for why.
+			lintCtxs = []lintcontext.LintContext{mergeContexts(lintCtxs)}
 
 			if verbose {
 				for _, lintCtx := range lintCtxs {

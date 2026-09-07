@@ -1,7 +1,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: partner-api-route
+  name: inventory-api-route
   namespace: default
 spec:
   parentRefs:
@@ -14,5 +14,5 @@ spec:
       backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
-          name: partner-api-upstream
-          port: 443
+          name: inventory-api-upstream
+          port: 8080
