@@ -1,0 +1,23 @@
+# Code owners for gwlint. GitHub requests a review from the matching owner
+# when a pull request touches these paths. Later rules win over earlier ones,
+# so the catch-all comes first.
+
+# Everything, unless a rule below is more specific.
+*                           @sdOps
+
+# Dependency pins. go.mod carries replace directives holding k8s.io/* and helm
+# down to the versions kube-linter v0.8.3 itself compiles against; moving them
+# breaks the build in ways the README explains at length. Changes here deserve
+# a real look, not a rubber stamp.
+/go.mod                     @sdOps
+/go.sum                     @sdOps
+
+# Suppressed vulnerability findings. Each entry claims a CVE is unreachable
+# from gwlint; a wrong claim here is worse than no allowlist at all.
+/.govulncheck-allowlist     @sdOps
+/scripts/vulncheck.sh       @sdOps
+
+# CI and lint policy: what "green" means for every other change.
+/.github/                   @sdOps
+/.golangci.yml              @sdOps
+/mise.toml                  @sdOps
