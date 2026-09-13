@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.stackrox.io/kube-linter/pkg/run"
 
 	gwversion "github.com/sdOps/gwlint/pkg/version"
 
@@ -20,7 +19,7 @@ import (
 // runLint runs the real lint command over the given paths and returns the
 // parsed JSON result alongside the command's error, which is what determines
 // gwlint's exit code.
-func runLint(t *testing.T, paths ...string) (run.Result, error) {
+func runLint(t *testing.T, paths ...string) (lintResult, error) {
 	t.Helper()
 	outPath := filepath.Join(t.TempDir(), "result.json")
 
@@ -32,12 +31,12 @@ func runLint(t *testing.T, paths ...string) (run.Result, error) {
 
 	contents, err := os.ReadFile(outPath) //nolint:gosec // test-controlled path
 	require.NoError(t, err, "lint command wrote no output file")
-	var result run.Result
+	var result lintResult
 	require.NoError(t, json.Unmarshal(contents, &result))
 	return result, cmdErr
 }
 
-func messagesFrom(result run.Result) []string {
+func messagesFrom(result lintResult) []string {
 	messages := make([]string, 0, len(result.Reports))
 	for _, report := range result.Reports {
 		messages = append(messages, report.Diagnostic.Message)
@@ -186,4 +185,61 @@ func TestLintPlainOutputNamesGwlintAndTheCheck(t *testing.T) {
 
 	assert.Contains(t, string(contents), "gwlint "+gwversion.Get())
 	assert.Contains(t, string(contents), "check: fqdn-backend-cold-start")
+}
+
+// A clean result and a result where nothing relevant was ever loaded both
+// printed "No lint errors found!", which gave a reader no way to tell whether
+// the manifests were checked or merely read.
+func TestPlainOutputReportsWhatWasScanned(t *testing.T) {
+	outPath := filepath.Join(t.TempDir(), "result.txt")
+
+	cmd := Command()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	cmd.SetArgs([]string{"--output", outPath, examplePath(t, "passing")})
+	require.NoError(t, cmd.Execute())
+
+	contents, err := os.ReadFile(outPath) //nolint:gosec // test-controlled path
+	require.NoError(t, err)
+
+	assert.Contains(t, string(contents), "No lint errors found.")
+	assert.Regexp(t, `Checked \d+ objects from \d+ files, \d+ in scope for the enabled checks\.`, string(contents))
+}
+
+// The case the summary exists for: objects loaded, but none a check applies to.
+func TestPlainOutputCallsOutWhenNothingIsInScope(t *testing.T) {
+	dir := t.TempDir()
+	source := examplePath(t, "passing", "service-backend")
+	for _, name := range []string{"httproute.yaml", "service.yaml"} {
+		copyManifest(t, source, dir, name)
+	}
+	outPath := filepath.Join(t.TempDir(), "result.txt")
+
+	cmd := Command()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	cmd.SetArgs([]string{"--output", outPath, dir})
+	require.NoError(t, cmd.Execute())
+
+	contents, err := os.ReadFile(outPath) //nolint:gosec // test-controlled path
+	require.NoError(t, err)
+
+	assert.Contains(t, string(contents), "none of which any enabled check applies to")
+}
+
+// The counts have to be in the machine-readable output too, and adding them
+// must not disturb the keys that were already there.
+func TestJSONOutputCarriesTheScanSummary(t *testing.T) {
+	result, err := runLint(t, examplePath(t, "failing"))
+	require.Error(t, err)
+
+	assert.Equal(t, 4, result.Scanned.InScope, "one BackendTrafficPolicy per failing scenario")
+	assert.Positive(t, result.Scanned.Objects)
+	assert.Positive(t, result.Scanned.Files)
+	assert.Zero(t, result.Scanned.Unparsed)
+	assert.GreaterOrEqual(t, result.Scanned.Objects, result.Scanned.InScope)
+	// Still the kube-linter-shaped fields.
+	assert.NotEmpty(t, result.Reports)
+	assert.NotEmpty(t, result.Checks)
+	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
 }

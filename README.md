@@ -105,6 +105,15 @@ gwlint version
 Output follows kube-linter's own shape: plain text by default, `--format json` for machine-readable output.
 Exit code is non-zero when lint errors are found, matching kube-linter's convention.
 
+Every run ends with a line saying what it actually looked at:
+
+```
+No lint errors found.
+Checked 98 objects from 38 files, 2 in scope for the enabled checks.
+```
+
+The in-scope count is the one worth reading. kube-linter decodes a kind it does not recognise into an unstructured object rather than rejecting it, so a large object count on its own does not mean a check ever ran; if nothing matched, the line says so outright rather than reporting a clean result that was never really checked.
+
 ### Linting across multiple charts, directories, or repos
 
 Gateway API resources are routinely authored across separate files: a platform team's Gateway and BackendTrafficPolicy chart, a different team's HTTPRoute chart, sometimes in entirely separate repos.

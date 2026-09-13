@@ -17,6 +17,7 @@ import (
 	"golang.stackrox.io/kube-linter/pkg/checkregistry"
 	"golang.stackrox.io/kube-linter/pkg/command/common"
 	kllint "golang.stackrox.io/kube-linter/pkg/command/lint"
+	"golang.stackrox.io/kube-linter/pkg/instantiatedcheck"
 	"golang.stackrox.io/kube-linter/pkg/lintcontext"
 	"golang.stackrox.io/kube-linter/pkg/pathutil"
 	"golang.stackrox.io/kube-linter/pkg/run"
@@ -31,8 +32,9 @@ const plainTemplateStr = `gwlint {{.Summary.KubeLinterVersion}}
 {{range .Reports}}
 {{- .Object.Metadata.FilePath | bold}}: (object: {{.Object.GetK8sObjectName | bold}}) {{.Diagnostic.Message | red}} (check: {{.Check | yellow}}, remediation: {{.Remediation | yellow}})
 
-{{else}}No lint errors found!
+{{else}}No lint errors found.
 {{end -}}
+{{.Scanned}}
 `
 
 var (
@@ -126,6 +128,15 @@ func Command() *cobra.Command {
 				return err
 			}
 			result.Summary.KubeLinterVersion = gwversion.Get()
+			// Report what was actually looked at, so a clean result cannot be
+			// confused with having parsed nothing.
+			instantiated := make([]*instantiatedcheck.InstantiatedCheck, 0, len(enabledChecks))
+			for _, name := range enabledChecks {
+				if chk := checkRegistry.Load(name); chk != nil {
+					instantiated = append(instantiated, chk)
+				}
+			}
+			scanned := lintResult{Result: result, Scanned: summarize(lintCtxs, instantiated)}
 
 			pairs, err := kllint.ValidateAndPairFormatsOutputs(formats, outputs, formatters.GetEnabledFormatters())
 			if err != nil {
@@ -143,7 +154,7 @@ func Command() *cobra.Command {
 					writeErrors = append(writeErrors, fmt.Errorf("failed to create output destination for %s: %w", pair.Format, err))
 					continue
 				}
-				writeErr := formatter(dest.Writer, result)
+				writeErr := formatter(dest.Writer, scanned)
 				closeErr := dest.Close()
 				if writeErr != nil {
 					writeErrors = append(writeErrors, fmt.Errorf("formatting failed for %s: %w", pair.Format, writeErr))
