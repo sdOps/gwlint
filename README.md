@@ -41,6 +41,47 @@ The fix in that incident, and the remediation this check recommends, is an activ
 **Remediation:** add a `healthCheck.active` or `healthCheck.passive` block to the `BackendTrafficPolicy`, or switch the `Backend` to an IP-based endpoint if the FQDN target isn't actually required.
 See the [Envoy Gateway health check docs](https://gateway.envoyproxy.io/docs/api/extension_types/#healthcheck).
 
+## Installation
+
+gwlint is a single self-contained binary with no third-party runtime dependencies. Building it needs Go 1.26.8 or newer.
+
+### go install
+
+```sh
+go install github.com/sdOps/gwlint/cmd/gwlint@latest
+```
+
+This puts `gwlint` in `$(go env GOPATH)/bin`; add that to your `PATH` if it isn't already.
+
+The repository is private today, so `go install` only works if you have access to it and Go is configured to fetch it directly rather than through the public module proxy:
+
+```sh
+export GOPRIVATE=github.com/sdOps/*
+```
+
+That step goes away once the repository is public.
+
+### From source
+
+```sh
+git clone https://github.com/sdOps/gwlint.git
+cd gwlint
+go build -o gwlint ./cmd/gwlint
+```
+
+Or, if you use [mise](https://mise.jdx.dev/), `mise install && mise run build` picks up the pinned Go toolchain from `mise.toml` instead of whatever Go you happen to have.
+
+### Verifying
+
+```sh
+gwlint version        # prints the version
+gwlint templates list # prints the checks this binary knows about
+```
+
+There are no tagged releases and no prebuilt binaries yet, so there is nothing to download and nothing to pin to.
+`gwlint version` reports `0.1.0-dev` from every build regardless of which commit it came from, since the version is still a constant in `pkg/version/version.go` rather than stamped in at link time.
+Both of those are release-process work that Phase 1 deliberately left alone.
+
 ## Usage
 
 ```sh
