@@ -8,8 +8,9 @@ It finds semantic misconfigurations that schema validators cannot see: a manifes
 It is built by importing kube-linter's engine packages as a library rather than forking them, so check logic can be upstreamed into kube-linter later with minimal rework.
 That constraint shapes most of the architecture below.
 
-`INSTRUCTION.md` holds the original engagement brief, the phase plan, and the backlog.
-Read it before starting a new check.
+`ROADMAP.md` tracks coverage: what a Gateway API linter should check, what is done, and what order to work in.
+`INSTRUCTION.md` holds the original engagement brief and phase plan.
+Read both before starting a new check, and tick the roadmap box when one lands.
 
 ## Build and test
 

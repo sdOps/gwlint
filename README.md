@@ -15,7 +15,8 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
 It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
 Checks are scoped to `BackendTrafficPolicy` and to all five route kinds; `Gateway`, `ListenerSet` and `Backend` are read while resolving them, and nothing reads `ReferenceGrant` yet.
-Route conflict detection, missing-`ReferenceGrant` detection, retry policy sanity, and missing passive health checks are planned next (Phase 2); see `INSTRUCTION.md` for the full backlog and a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific check set is further along.
+`ROADMAP.md` tracks what a Gateway API linter should cover and where gwlint is against it: three of roughly twenty-five, with core Gateway API ahead of implementation-specific work.
+`INSTRUCTION.md` holds the original phase plan, including a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific set is further along.
 
 ## Scope
 
