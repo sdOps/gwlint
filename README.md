@@ -209,7 +209,12 @@ It is its own workflow because it is the only check whose result can change with
 It fails on anything reachable from gwlint's own code that is not recorded in `.govulncheck-allowlist`, and equally fails on an entry there that is no longer reported.
 That file lists what is currently suppressed and why; it is the one place that has to stay accurate, so it is not repeated here.
 
-Unlike helm's govulncheck workflow, this one is not filtered to `go.sum` changes: govulncheck answers whether gwlint's own code reaches a vulnerable symbol, so a source change can alter the result with no dependency change at all.
+`.github/workflows/next-go.yml` builds and tests against the newest stable Go release, weekly and on demand.
+gwlint pins one Go version, so nothing else would notice a newer toolchain breaking the build until somebody tried to bump the pin; this makes that upgrade a known quantity instead of a discovery.
+It is deliberately not part of CI and does not gate anything, because a regression in an upstream Go release is not a reason to block a pull request.
+Run it from the Actions tab before changing the version in `go.mod`.
+
+Unlike helm's govulncheck workflow, the vulnerability workflow is not filtered to `go.sum` changes: govulncheck answers whether gwlint's own code reaches a vulnerable symbol, so a source change can alter the result with no dependency change at all.
 
 Every action is pinned to a commit SHA rather than a tag, with the version in a trailing comment, so a moved tag cannot change what CI runs.
 

@@ -1,0 +1,53 @@
+name: Next Go
+
+# A forward-looking canary, deliberately kept out of the checks that gate a
+# merge. gwlint pins one Go version (go.mod, matched by mise.toml), so nothing
+# else would notice a newer toolchain breaking the build until somebody tried
+# to bump the pin. This runs the build and tests against the newest stable Go
+# so that upgrade is a known quantity rather than a discovery.
+#
+# It is not in the CI workflow on purpose: a regression in an upstream Go
+# release is not a reason to block a pull request.
+on:
+  schedule:
+    # Weekly. Go releases are infrequent, so daily would only add noise.
+    - cron: "23 5 * * 1"
+  # So it can be run on demand before bumping the pin in go.mod.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next-go
+  cancel-in-progress: true
+
+jobs:
+  next-go:
+    name: Newest stable Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # "stable" always resolves to the newest released Go, so this needs no
+      # maintenance as releases come out. When the pin catches up, the job
+      # simply tests the same version CI already does, which is harmless.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Report the versions being compared
+        run: |
+          echo "pinned in go.mod: $(grep -m1 '^go ' go.mod | awk '{print $2}')"
+          echo "testing against:  $(go env GOVERSION)"
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+      # golangci-lint is deliberately not run here: its pinned version may not
+      # support a Go release yet, and that would fail the job for a reason that
+      # has nothing to do with gwlint's own code.
