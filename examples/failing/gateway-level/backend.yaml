@@ -6,5 +6,5 @@ metadata:
 spec:
   endpoints:
     - fqdn:
-        hostname: partner-api.example.com
+        hostname: billing-api.example.com
         port: 443

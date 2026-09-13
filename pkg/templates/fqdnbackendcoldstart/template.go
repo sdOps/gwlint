@@ -70,10 +70,10 @@ func checkFunc(lintCtx lintcontext.LintContext, object lintcontext.Object) []dia
 				if hostname, ok := fqdnHostname(backend); ok {
 					diagnostics = append(diagnostics, diagnostic.Diagnostic{
 						Message: fmt.Sprintf(
-							"BackendTrafficPolicy has no health check, but targets %s, which routes to "+
-								"Backend %q with FQDN endpoint %q; this backend resolves via DNS at startup "+
-								"and can 503 before the name resolves",
-							describeTarget(ref, route), backend.Name, hostname),
+							"BackendTrafficPolicy has no health check, but %s Backend %q with FQDN "+
+								"endpoint %q; this backend resolves via DNS at startup and can 503 "+
+								"before the name resolves",
+							describeCoverage(ref, route), backend.Name, hostname),
 					})
 				}
 			}
@@ -221,15 +221,15 @@ func parentRefsOf(obj k8sutil.Object) ([]gatewayv1.ParentReference, string) {
 	}
 }
 
-// describeTarget renders the policy's targetRef for the diagnostic message.
-// For a Gateway-kind targetRef, the actual route that carries the FQDN
-// backend is also named, since the policy itself never mentions it.
-func describeTarget(ref targetRef, route resolvedRoute) string {
-	target := fmt.Sprintf("%s %q", ref.Kind, ref.Name)
+// describeCoverage renders how the policy reaches the FQDN-backed route, as
+// the clause leading into the Backend name in the diagnostic message. For a
+// Gateway-kind targetRef the route carrying the FQDN backend is named too,
+// since the policy itself never mentions it.
+func describeCoverage(ref targetRef, route resolvedRoute) string {
 	if ref.Kind == "Gateway" {
-		target = fmt.Sprintf("%s, whose attached %s %q", target, route.Kind, route.Name)
+		return fmt.Sprintf("targets Gateway %q, whose attached %s %q routes to", ref.Name, route.Kind, route.Name)
 	}
-	return target
+	return fmt.Sprintf("targets %s %q, which routes to", ref.Kind, ref.Name)
 }
 
 // isEnvoyGatewayBackendRef reports whether ref points at an Envoy Gateway
