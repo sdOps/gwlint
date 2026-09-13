@@ -196,14 +196,20 @@ mise exec -- golangci-lint fmt --diff ./...
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in four parallel jobs:
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in three parallel jobs:
 
 - **Build and test** builds the binary, runs `go vet`, runs the tests under the race detector, and then runs the compiled binary against `examples/failing` and `examples/passing`, checking each exits the way it should.
   The unit tests exercise the check through a lint context; this last step is the only thing that proves the shipped binary works on real manifests.
 - **Lint** runs `golangci-lint run` and `golangci-lint fmt --diff`, then checks that `mise.toml` and `go.mod` still name the same Go version.
 - **go.mod is tidy** runs `go mod tidy` and fails if `go.mod` or `go.sum` changed.
-- **Vulnerabilities** runs `govulncheck` through `scripts/vulncheck.sh`, which fails on anything reachable from gwlint's own code that is not recorded in `.govulncheck-allowlist`, and equally fails on an entry there that is no longer reported.
-  That file lists what is currently suppressed and why; it is the one place that has to stay accurate, so it is not repeated here.
+`.github/workflows/vulncheck.yml` runs `govulncheck` separately, on pushes and pull requests but also nightly and on demand.
+It is its own workflow because it is the only check whose result can change without the repository changing: govulncheck fetches the vulnerability database at every run, so an advisory published against an unchanged dependency would otherwise go unnoticed until somebody happened to push.
+It fails on anything reachable from gwlint's own code that is not recorded in `.govulncheck-allowlist`, and equally fails on an entry there that is no longer reported.
+That file lists what is currently suppressed and why; it is the one place that has to stay accurate, so it is not repeated here.
+
+Unlike helm's govulncheck workflow, this one is not filtered to `go.sum` changes: govulncheck answers whether gwlint's own code reaches a vulnerable symbol, so a source change can alter the result with no dependency change at all.
+
+Every action is pinned to a commit SHA rather than a tag, with the version in a trailing comment, so a moved tag cannot change what CI runs.
 
 CI installs its toolchain with mise from the same `mise.toml` a developer uses, so a green local `mise run check` means the same tool versions ran locally as in CI.
 CI runs on Linux only; nothing currently exercises the macOS or Windows paths.

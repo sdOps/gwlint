@@ -1,0 +1,49 @@
+name: Vulnerabilities
+
+# Its own workflow because it is the one check whose result can change without
+# the repository changing: the Go vulnerability database is fetched at every
+# run, so a newly published advisory against an unchanged dependency only
+# surfaces on a scheduled run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily, off the hour to avoid the top-of-hour scheduling crowd.
+    - cron: "17 4 * * *"
+  # So an advisory can be checked without waiting for the next night.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vulncheck-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
+      - name: Cache Go modules and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-vuln-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-vuln-
+
+      # Deliberately not filtered to go.sum changes the way helm's is:
+      # govulncheck answers whether gwlint's own code reaches a vulnerable
+      # symbol, so a source change can alter the result with no dependency
+      # change at all. The job takes about a minute, so there is nothing to
+      # save by narrowing it.
+      - run: mise run vulncheck
