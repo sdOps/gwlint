@@ -66,12 +66,13 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 
 	// A non-nil error is what gives gwlint its non-zero exit code.
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found 5 lint errors")
+	assert.Contains(t, err.Error(), "found 6 lint errors")
 
-	require.Len(t, result.Reports, 5)
+	require.Len(t, result.Reports, 6)
 	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
 	for _, report := range result.Reports {
-		assert.Contains(t, []string{"fqdn-backend-cold-start", "dangling-parent-ref"}, report.Check)
+		assert.Contains(t,
+			[]string{"fqdn-backend-cold-start", "dangling-parent-ref", "dangling-backend-ref"}, report.Check)
 		assert.NotEmpty(t, report.Remediation)
 		assert.NotEmpty(t, report.Object.Metadata.FilePath)
 	}
@@ -98,6 +99,9 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 		// A parentRef naming a Gateway that is not there.
 		`HTTPRoute "reporting-route" attaches to Gateway "reportng-gateway" in namespace "reporting", ` +
 			`which is not present; the route will never be programmed and its traffic will not be served`,
+		// A backendRef naming a Service that is not there.
+		`HTTPRoute "storefront-route" routes to Service "storefront-chekout" in namespace "storefront", ` +
+			`which is not present; requests matching that rule have nowhere to go`,
 	}, messagesFrom(result))
 }
 
@@ -236,9 +240,9 @@ func TestJSONOutputCarriesTheScanSummary(t *testing.T) {
 	result, err := runLint(t, examplePath(t, "failing"))
 	require.Error(t, err)
 
-	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4, "HTTPRoute": 4, "TCPRoute": 1},
+	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4, "HTTPRoute": 5, "TCPRoute": 1},
 		result.Scanned.CheckedByKind, "one policy per failing scenario, plus every route")
-	assert.Equal(t, 9, result.Scanned.Checked)
+	assert.Equal(t, 10, result.Scanned.Checked)
 	assert.Equal(t,
 		[]string{"BackendTrafficPolicy", "GRPCRoute", "HTTPRoute", "TCPRoute", "TLSRoute", "UDPRoute"},
 		result.Scanned.LooksFor)

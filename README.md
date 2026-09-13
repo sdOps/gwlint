@@ -44,6 +44,21 @@ A `parentRef` into another API group is left alone, since it belongs to some oth
 
 **Remediation:** correct the `parentRef`, or include the manifests that define the Gateway in the same `gwlint` invocation.
 
+### `dangling-backend-ref`
+
+Flags a route whose `backendRefs` name a `Service` or Envoy Gateway `Backend` that is not present.
+
+Gateway API resolves a `backendRef` at runtime, so a name that resolves to nothing does not fail the apply.
+The route is programmed and then serves errors for that backend, which is the Gateway API counterpart of kube-linter's own `dangling-service`.
+It is vendor-neutral for the `Service` case, which is the default kind when a `backendRef` names no kind at all.
+
+**What it does not cover:** a reference is judged only into a namespace the manifest set actually describes.
+Routes routinely point at workloads owned by another team and rendered from another repo, and a namespace absent from the set says nothing about what exists there.
+A weaker guard, that any object of the kind exists anywhere, is not enough: a set can carry a `Service` in its own namespace while saying nothing about the application namespaces its routes target.
+A `backendRef` into another vendor's CRD is left alone for the same reason, since gwlint has no typed knowledge of it.
+
+**Remediation:** correct the `backendRef`, or include the manifests that define the backend in the same `gwlint` invocation.
+
 ### `fqdn-backend-cold-start`
 
 Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy covers a route whose `backendRefs` point at an Envoy Gateway `Backend` object with one or more FQDN endpoints (`spec.endpoints[].fqdn.hostname`).
@@ -190,6 +205,8 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 
 - `examples/failing/dangling-parent-ref`: a route whose `parentRefs` names a Gateway that is not there.
 - `examples/passing/parent-ref-resolves`: the same shape, with the Gateway present.
+- `examples/failing/dangling-backend-ref`: a route whose `backendRefs` names a Service that is not there.
+- `examples/passing/backend-ref-resolves`: the same shape, with the Service present.
 - `examples/failing/direct-route`: policy targets the `HTTPRoute` directly, no health check, FQDN backend.
 - `examples/failing/gateway-level`: policy targets the `Gateway`, no health check, a route attached to that Gateway has an FQDN backend.
 - `examples/failing/cross-namespace-gateway`: platform team's Gateway-level policy in one namespace, an application team's FQDN-backed route in another, attached across namespaces via `parentRefs`.

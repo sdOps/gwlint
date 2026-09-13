@@ -9,6 +9,7 @@ package all
 
 import (
 	// Each check package registers its template via init().
+	_ "github.com/sdOps/gwlint/pkg/templates/danglingbackendref"
 	_ "github.com/sdOps/gwlint/pkg/templates/danglingparentref"
 	_ "github.com/sdOps/gwlint/pkg/templates/fqdnbackendcoldstart"
 )

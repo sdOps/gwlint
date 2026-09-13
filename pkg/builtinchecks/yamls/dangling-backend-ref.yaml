@@ -1,0 +1,11 @@
+name: "dangling-backend-ref"
+description: "Flag routes whose backendRefs name a Service or Backend that is not present, so requests matching that rule have nowhere to go"
+remediation: "Correct the backendRef to name an existing Service or Backend, or include the manifests that define it in the same gwlint invocation. Gateway API resolves a backendRef at runtime: a name that resolves to nothing does not fail the apply, it makes the route serve errors for that backend."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "dangling-backend-ref"

@@ -1,7 +1,9 @@
 package gatewayapi
 
 import (
+	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
 	"golang.stackrox.io/kube-linter/pkg/lintcontext"
+	corev1 "k8s.io/api/core/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	gwobjectkinds "github.com/sdOps/gwlint/pkg/objectkinds"
@@ -96,3 +98,37 @@ func ListenerSetParent(ls *gatewayv1.ListenerSet) ObjectRef {
 // GroupName is the Gateway API group, re-exported so checks do not each import
 // the API package just to compare a group string.
 const GroupName = gatewayv1.GroupName
+
+// BackendTargets indexes the objects a backendRef can resolve to: core
+// Services and Envoy Gateway Backends. Kinds gwlint has no typed knowledge of
+// are absent, so a check can tell "not there" from "cannot judge".
+func BackendTargets(lintCtx lintcontext.LintContext) map[ObjectRef]struct{} {
+	found := make(map[ObjectRef]struct{})
+	for _, obj := range lintCtx.Objects() {
+		var kind string
+		switch obj.K8sObject.(type) {
+		case *corev1.Service:
+			kind = "Service"
+		case *egv1a1.Backend:
+			kind = egv1a1.KindBackend
+		default:
+			continue
+		}
+		found[ObjectRef{Kind: kind, Namespace: obj.K8sObject.GetNamespace(), Name: obj.K8sObject.GetName()}] = struct{}{}
+	}
+	return found
+}
+
+// ResolvableBackendKind reports whether gwlint can judge a backendRef of this
+// group and kind at all. A ref into some other vendor's CRD is not something
+// the absence of an object says anything about.
+func ResolvableBackendKind(group, kind string) bool {
+	switch {
+	case group == "" && kind == "Service":
+		return true
+	case group == egv1a1.GroupName && kind == egv1a1.KindBackend:
+		return true
+	default:
+		return false
+	}
+}
