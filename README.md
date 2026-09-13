@@ -1,6 +1,7 @@
 # gwlint
 
-gwlint is a static analysis tool for Kubernetes Gateway API resources (`Gateway`, `HTTPRoute`, `GRPCRoute`, `ReferenceGrant`) and Envoy Gateway's own CRDs (`BackendTrafficPolicy`, `Backend`).
+gwlint is a static analysis tool for Kubernetes Gateway API and Envoy Gateway manifests.
+It parses `Gateway`, `HTTPRoute`, `GRPCRoute` and `ReferenceGrant` alongside Envoy Gateway's own `BackendTrafficPolicy` and `Backend`, and correlates them with each other rather than judging any one object alone.
 It's for semantic misconfigurations that schema validators can't see: things a manifest can be perfectly valid and still get wrong, like a backend that resolves via DNS at startup with no health check to cover the gap.
 
 Schema validators like kubeconform confirm a manifest is structurally valid.
@@ -13,6 +14,7 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 
 This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
 It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
+Of the kinds gwlint parses, only `BackendTrafficPolicy` has a check scoped to it today; `Gateway`, `HTTPRoute`, `GRPCRoute` and `Backend` are read while resolving that check, and nothing reads `ReferenceGrant` yet.
 Route conflict detection, missing-`ReferenceGrant` detection, retry policy sanity, and missing passive health checks are planned next (Phase 2); see `INSTRUCTION.md` for the full backlog and a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific check set is further along.
 
 ## Scope
@@ -51,7 +53,7 @@ gwlint is a single self-contained binary with no third-party runtime dependencie
 go install github.com/sdOps/gwlint/cmd/gwlint@latest
 ```
 
-This puts `gwlint` in `$(go env GOPATH)/bin`; add that to your `PATH` if it isn't already.
+This puts `gwlint` in `$(go env GOBIN)`, or in `$(go env GOPATH)/bin` when `GOBIN` is unset; make sure whichever one applies is on your `PATH`.
 
 The repository is private today, so `go install` only works if you have access to it and Go is configured to fetch it directly rather than through the public module proxy:
 
@@ -92,7 +94,7 @@ gwlint templates list
 gwlint version
 ```
 
-Output format matches kube-linter's own: plain text by default, `--format json` for machine-readable output.
+Output follows kube-linter's own shape: plain text by default, `--format json` for machine-readable output.
 Exit code is non-zero when lint errors are found, matching kube-linter's convention.
 
 ### Linting across multiple charts, directories, or repos
@@ -101,7 +103,8 @@ Gateway API resources are routinely authored across separate files: a platform t
 kube-linter's own `lintcontext` scopes each object to the directory it was loaded from, so a check that needs to correlate a policy with the route it covers would silently see nothing if the two live in different directories, even when passed to the same `gwlint lint` invocation.
 
 gwlint's `lint` command deliberately merges every discovered context into one before running checks, so `gwlint lint <path1> <path2> ...` correlates objects across however many directories, Helm charts, or Helm releases they came from.
-This matters because `helm template --output-dir` (and `helmfile template --output-dir`) both write one subdirectory per release, so even a single repo's rendered output is typically several directories deep; merging means you can point gwlint at the top of that output tree without flattening it by hand first.
+This matters because rendering to a directory never produces one flat pile of YAML: `helm template --output-dir` writes a subdirectory per chart (`<output-dir>/<chart-name>/templates/...`, plus one more for every subchart), and `helmfile template --output-dir` writes one per release.
+Even a single repo's rendered output is several directories deep, so merging means you can point gwlint at the top of that tree without flattening it by hand first.
 
 **Plain Helm, one chart per repo.** Render each repo's chart to its own output directory with the same values file (or `--set` overrides) you'd actually deploy with, then point gwlint at both directories in one call:
 
@@ -218,7 +221,7 @@ Revisit these pins whenever either dependency is upgraded.
 
 ## Architecture
 
-gwlint imports kube-linter's engine packages (`pkg/check`, `pkg/config`, `pkg/lintcontext`, `pkg/objectkinds`, `pkg/templates`, `pkg/diagnostic`, `pkg/checkregistry`, `pkg/run`) rather than forking kube-linter's source.
+gwlint imports kube-linter's engine packages (`pkg/check`, `pkg/config`, `pkg/lintcontext`, `pkg/objectkinds`, `pkg/templates`, `pkg/diagnostic`, `pkg/checkregistry`, `pkg/run`, `pkg/k8sutil`, `pkg/pathutil`) rather than forking kube-linter's source.
 
 A few things kube-linter doesn't expose a way to extend from outside its own module, so gwlint reimplements them:
 
