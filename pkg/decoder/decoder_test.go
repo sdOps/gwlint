@@ -189,3 +189,60 @@ metadata:
 
 	require.Error(t, err)
 }
+
+// TCPRoute, TLSRoute and UDPRoute are experimental-channel resources normally
+// authored as v1alpha2, and ReferenceGrant as v1beta1. Registering only v1
+// meant those manifests failed to decode and were silently dropped.
+func TestDecodesRouteKindsAtEveryServedVersion(t *testing.T) {
+	cases := []struct {
+		apiVersion string
+		kind       string
+	}{
+		{"gateway.networking.k8s.io/v1", "HTTPRoute"},
+		{"gateway.networking.k8s.io/v1beta1", "HTTPRoute"},
+		{"gateway.networking.k8s.io/v1", "GRPCRoute"},
+		{"gateway.networking.k8s.io/v1alpha2", "GRPCRoute"},
+		{"gateway.networking.k8s.io/v1", "TCPRoute"},
+		{"gateway.networking.k8s.io/v1alpha2", "TCPRoute"},
+		{"gateway.networking.k8s.io/v1", "TLSRoute"},
+		{"gateway.networking.k8s.io/v1alpha2", "TLSRoute"},
+		{"gateway.networking.k8s.io/v1alpha3", "TLSRoute"},
+		{"gateway.networking.k8s.io/v1", "UDPRoute"},
+		{"gateway.networking.k8s.io/v1alpha2", "UDPRoute"},
+		{"gateway.networking.k8s.io/v1", "ReferenceGrant"},
+		{"gateway.networking.k8s.io/v1beta1", "ReferenceGrant"},
+		{"gateway.networking.k8s.io/v1alpha2", "ReferenceGrant"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.apiVersion+"/"+c.kind, func(t *testing.T) {
+			obj, _, err := decoder.Decoder.Decode([]byte(
+				"apiVersion: "+c.apiVersion+"\nkind: "+c.kind+"\nmetadata:\n  name: probe\n  namespace: default\n"),
+				nil, nil)
+			require.NoError(t, err)
+			require.NotNil(t, obj)
+			assert.Equal(t, c.kind, obj.GetObjectKind().GroupVersionKind().Kind)
+		})
+	}
+}
+
+func TestDecodesListenerSet(t *testing.T) {
+	obj := decode(t, `
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: extra-listeners
+  namespace: infra
+spec:
+  parentRef:
+    name: mesh-gateway
+  listeners:
+    - name: https
+      port: 8443
+      protocol: HTTPS
+`)
+
+	ls, ok := obj.(*gatewayv1.ListenerSet)
+	require.True(t, ok, "expected *gatewayv1.ListenerSet, got %T", obj)
+	assert.Equal(t, gatewayv1.ObjectName("mesh-gateway"), ls.Spec.ParentRef.Name)
+}

@@ -67,9 +67,9 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 
 	// A non-nil error is what gives gwlint its non-zero exit code.
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found 3 lint errors")
+	assert.Contains(t, err.Error(), "found 4 lint errors")
 
-	require.Len(t, result.Reports, 3)
+	require.Len(t, result.Reports, 4)
 	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
 	for _, report := range result.Reports {
 		assert.Equal(t, "fqdn-backend-cold-start", report.Check)
@@ -91,6 +91,11 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 			`whose attached HTTPRoute "ledger-route" routes to Backend "ledger-upstream" ` +
 			`with FQDN endpoint "ledger.example.com"; this backend resolves via DNS at startup ` +
 			`and can 503 before the name resolves`,
+		// A TCPRoute, authored as v1alpha2: both the route kind and the API
+		// version were invisible to gwlint before.
+		`BackendTrafficPolicy has no health check, but targets TCPRoute "database-route", ` +
+			`which routes to Backend "database-upstream" with FQDN endpoint "database.example.com"; ` +
+			`this backend resolves via DNS at startup and can 503 before the name resolves`,
 	}, messagesFrom(result))
 }
 

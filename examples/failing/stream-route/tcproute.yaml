@@ -1,0 +1,13 @@
+# TCPRoute is an experimental-channel resource, still commonly authored as
+# v1alpha2 rather than v1.
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: database-route
+  namespace: data
+spec:
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: database-upstream

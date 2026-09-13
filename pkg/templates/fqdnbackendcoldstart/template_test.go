@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	policyName  = "partner-api-route-policy"
-	routeName   = "partner-api-route"
-	backendName = "partner-api-upstream"
-	fqdnHost    = "partner-api.example.com"
-	namespace   = "default"
+	policyName      = "partner-api-route-policy"
+	routeName       = "partner-api-route"
+	backendName     = "partner-api-upstream"
+	listenerSetName = "extra-listeners"
+	fqdnHost        = "partner-api.example.com"
+	namespace       = "default"
 )
 
 func TestFQDNBackendColdStart(t *testing.T) {
@@ -211,6 +212,92 @@ func (s *FQDNBackendColdStartTestSuite) expectNoDiagnostics() {
 	s.Validate(s.ctx, []templates.TestCase{
 		{Diagnostics: map[string][]diagnostic.Diagnostic{}},
 	})
+}
+
+func (s *FQDNBackendColdStartTestSuite) addLabelledHTTPRoute(name string, lbls map[string]string, refs ...gatewayv1.BackendObjectReference) {
+	s.addLabelledHTTPRouteInNamespace(name, namespace, lbls, refs...)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addLabelledHTTPRouteInNamespace(name, ns string, lbls map[string]string, refs ...gatewayv1.BackendObjectReference) {
+	backendRefs := make([]gatewayv1.HTTPBackendRef, 0, len(refs))
+	for _, ref := range refs {
+		backendRefs = append(backendRefs, gatewayv1.HTTPBackendRef{
+			BackendRef: gatewayv1.BackendRef{BackendObjectReference: ref},
+		})
+	}
+	route := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: lbls},
+		Spec:       gatewayv1.HTTPRouteSpec{Rules: []gatewayv1.HTTPRouteRule{{BackendRefs: backendRefs}}},
+	}
+	route.SetGroupVersionKind(routeGVK("HTTPRoute"))
+	s.ctx.AddObject(name, route)
+}
+
+func backendRefsOf(refs []gatewayv1.BackendObjectReference) []gatewayv1.BackendRef {
+	out := make([]gatewayv1.BackendRef, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, gatewayv1.BackendRef{BackendObjectReference: ref})
+	}
+	return out
+}
+
+func (s *FQDNBackendColdStartTestSuite) addTCPRoute(name string, refs ...gatewayv1.BackendObjectReference) {
+	s.addTCPRouteWithParent(name, "", refs...)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addTCPRouteWithParent(name, parentGateway string, refs ...gatewayv1.BackendObjectReference) {
+	route := &gatewayv1.TCPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: gatewayv1.TCPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: parentRefsFor(parentGateway)},
+			Rules:           []gatewayv1.TCPRouteRule{{BackendRefs: backendRefsOf(refs)}},
+		},
+	}
+	route.SetGroupVersionKind(routeGVK("TCPRoute"))
+	s.ctx.AddObject(name, route)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addTLSRoute(name string, refs ...gatewayv1.BackendObjectReference) {
+	route := &gatewayv1.TLSRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec:       gatewayv1.TLSRouteSpec{Rules: []gatewayv1.TLSRouteRule{{BackendRefs: backendRefsOf(refs)}}},
+	}
+	route.SetGroupVersionKind(routeGVK("TLSRoute"))
+	s.ctx.AddObject(name, route)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addUDPRoute(name string, refs ...gatewayv1.BackendObjectReference) {
+	route := &gatewayv1.UDPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec:       gatewayv1.UDPRouteSpec{Rules: []gatewayv1.UDPRouteRule{{BackendRefs: backendRefsOf(refs)}}},
+	}
+	route.SetGroupVersionKind(routeGVK("UDPRoute"))
+	s.ctx.AddObject(name, route)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addListenerSet(parentGateway string) {
+	ls := &gatewayv1.ListenerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: listenerSetName, Namespace: namespace},
+		Spec: gatewayv1.ListenerSetSpec{
+			ParentRef: gatewayv1.ParentGatewayReference{Name: gatewayv1.ObjectName(parentGateway)},
+		},
+	}
+	ls.SetGroupVersionKind(routeGVK("ListenerSet"))
+	s.ctx.AddObject(listenerSetName, ls)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addPolicyWithSelector(sel egv1a1.TargetSelector) {
+	policy := s.newPolicy(nil)
+	policy.Spec.TargetSelectors = []egv1a1.TargetSelector{sel}
+	s.ctx.AddObject(policyName, policy)
+}
+
+func selectorCoverage(kind, name string) string {
+	return fmt.Sprintf("selects %s %q, which routes to", kind, name)
+}
+
+func listenerSetCoverage(listenerSet, routeKind, route string) string {
+	return fmt.Sprintf("targets ListenerSet %q, whose attached %s %q routes to", listenerSet, routeKind, route)
 }
 
 func (s *FQDNBackendColdStartTestSuite) TestFlagsFQDNBackendWithNoHealthCheck() {
@@ -478,4 +565,157 @@ func (s *FQDNBackendColdStartTestSuite) TestIgnoresSameNamedBackendInPolicyNames
 	s.ctx.AddObject("decoy-backend", decoy)
 
 	s.expectDiagnostics(wantMessage(gatewayCoverage("edge-gateway", "HTTPRoute", "ledger-route"), "ledger-upstream"))
+}
+
+// Envoy Gateway's BackendTrafficPolicy accepts seven target kinds. Every route
+// kind among them carries backendRefs, so every one can point at an FQDN
+// Backend and needs resolving; the check used to handle only HTTPRoute and
+// GRPCRoute and returned nothing for the rest.
+func (s *FQDNBackendColdStartTestSuite) TestFlagsEveryRouteKindTargetedDirectly() {
+	for _, tc := range []struct {
+		kind string
+		add  func(name string, refs ...gatewayv1.BackendObjectReference)
+	}{
+		{"TCPRoute", s.addTCPRoute},
+		{"TLSRoute", s.addTLSRoute},
+		{"UDPRoute", s.addUDPRoute},
+	} {
+		s.Run(tc.kind, func() {
+			s.SetupTest()
+			tc.add("stream-route", envoyBackendRef(backendName, ""))
+			s.addBackend(backendName, namespace, true)
+			s.addPolicyTargeting(nil, gatewayv1.Kind(tc.kind), "stream-route")
+
+			s.expectDiagnostics(wantMessage(directCoverage(tc.kind, "stream-route"), backendName))
+		})
+	}
+}
+
+// The same kinds have to be picked up when a Gateway-level policy sweeps every
+// route attached to the Gateway, not only when named directly.
+func (s *FQDNBackendColdStartTestSuite) TestFlagsStreamRoutesAttachedToTargetedGateway() {
+	s.addTCPRouteWithParent("stream-route", "public-gateway", envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("public-gateway", "TCPRoute", "stream-route"), backendName))
+}
+
+// targetSelectors pick routes by label rather than by name. They were never
+// resolved, so a policy that used them checked nothing at all.
+func (s *FQDNBackendColdStartTestSuite) TestFlagsRoutesMatchedByTargetSelectorLabels() {
+	s.addLabelledHTTPRoute(routeName, map[string]string{"tier": "edge"}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyWithSelector(egv1a1.TargetSelector{
+		Kind:        "HTTPRoute",
+		MatchLabels: map[string]string{"tier": "edge"},
+	})
+
+	s.expectDiagnostics(wantMessage(selectorCoverage("HTTPRoute", routeName), backendName))
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestPassesWhenTargetSelectorLabelsDoNotMatch() {
+	s.addLabelledHTTPRoute(routeName, map[string]string{"tier": "internal"}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyWithSelector(egv1a1.TargetSelector{
+		Kind:        "HTTPRoute",
+		MatchLabels: map[string]string{"tier": "edge"},
+	})
+
+	s.expectNoDiagnostics()
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestTargetSelectorMatchExpressionsAreHonoured() {
+	s.addLabelledHTTPRoute(routeName, map[string]string{"tier": "edge"}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyWithSelector(egv1a1.TargetSelector{
+		Kind: "HTTPRoute",
+		MatchExpressions: []metav1.LabelSelectorRequirement{{
+			Key:      "tier",
+			Operator: metav1.LabelSelectorOpIn,
+			Values:   []string{"edge", "public"},
+		}},
+	})
+
+	s.expectDiagnostics(wantMessage(selectorCoverage("HTTPRoute", routeName), backendName))
+}
+
+// A selector defaults to the policy's own namespace, so a route elsewhere is
+// out of scope unless the selector says otherwise.
+func (s *FQDNBackendColdStartTestSuite) TestTargetSelectorDefaultsToPolicyNamespace() {
+	s.addLabelledHTTPRouteInNamespace(routeName, "elsewhere", map[string]string{"tier": "edge"}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, "elsewhere", true)
+	s.addPolicyWithSelector(egv1a1.TargetSelector{
+		Kind:        "HTTPRoute",
+		MatchLabels: map[string]string{"tier": "edge"},
+	})
+
+	s.expectNoDiagnostics()
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestTargetSelectorWithAllNamespacesCrossesNamespaces() {
+	s.addLabelledHTTPRouteInNamespace(routeName, "elsewhere", map[string]string{"tier": "edge"}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, "elsewhere", true)
+	s.addPolicyWithSelector(egv1a1.TargetSelector{
+		Kind:        "HTTPRoute",
+		MatchLabels: map[string]string{"tier": "edge"},
+		Namespaces:  &egv1a1.TargetSelectorNamespaces{From: egv1a1.TargetNamespaceFromAll},
+	})
+
+	s.expectDiagnostics(wantMessage(selectorCoverage("HTTPRoute", routeName), backendName))
+}
+
+// Gateway API's attachment hierarchy runs Gateway to ListenerSet to Route, so
+// a Gateway-level policy reaches routes attached to a ListenerSet of that
+// Gateway, not only routes naming the Gateway directly.
+func (s *FQDNBackendColdStartTestSuite) TestGatewayPolicyReachesRoutesViaListenerSet() {
+	s.addListenerSet("public-gateway")
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{{
+		Kind: kindPtr("ListenerSet"),
+		Name: "extra-listeners",
+	}}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("public-gateway", "HTTPRoute", routeName), backendName))
+}
+
+// A policy may also target a ListenerSet directly.
+func (s *FQDNBackendColdStartTestSuite) TestFlagsRoutesAttachedToTargetedListenerSet() {
+	s.addListenerSet("public-gateway")
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{{
+		Kind: kindPtr("ListenerSet"),
+		Name: "extra-listeners",
+	}}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargeting(nil, "ListenerSet", "extra-listeners")
+
+	s.expectDiagnostics(wantMessage(listenerSetCoverage("extra-listeners", "HTTPRoute", routeName), backendName))
+}
+
+// A route naming both the Gateway and one of its ListenerSets must be reported
+// once, not twice.
+func (s *FQDNBackendColdStartTestSuite) TestRouteAttachedToBothGatewayAndItsListenerSetIsReportedOnce() {
+	s.addListenerSet("public-gateway")
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{
+		{Name: "public-gateway"},
+		{Kind: kindPtr("ListenerSet"), Name: "extra-listeners"},
+	}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("public-gateway", "HTTPRoute", routeName), backendName))
+}
+
+// A ListenerSet belonging to a different Gateway must not pull its routes in.
+func (s *FQDNBackendColdStartTestSuite) TestPassesWhenListenerSetBelongsToAnotherGateway() {
+	s.addListenerSet("some-other-gateway")
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{{
+		Kind: kindPtr("ListenerSet"),
+		Name: "extra-listeners",
+	}}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+
+	s.expectNoDiagnostics()
 }

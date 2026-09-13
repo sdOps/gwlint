@@ -1,0 +1,11 @@
+# Policies can target TCP, TLS and UDP routes too, not just HTTP and gRPC.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: database-policy
+  namespace: data
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: TCPRoute
+      name: database-route

@@ -1,0 +1,10 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: database-upstream
+  namespace: data
+spec:
+  endpoints:
+    - fqdn:
+        hostname: database.example.com
+        port: 5432

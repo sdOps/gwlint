@@ -1,7 +1,7 @@
 # gwlint
 
 gwlint is a static analysis tool for Kubernetes Gateway API and Envoy Gateway manifests.
-It parses `Gateway`, `HTTPRoute`, `GRPCRoute` and `ReferenceGrant` alongside Envoy Gateway's own `BackendTrafficPolicy` and `Backend`, and correlates them with each other rather than judging any one object alone.
+It parses every Gateway API route kind (`HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute`) plus `Gateway`, `ListenerSet` and `ReferenceGrant`, at every version each is served at, alongside Envoy Gateway's own `BackendTrafficPolicy` and `Backend`, and correlates them with each other rather than judging any one object alone.
 It's for semantic misconfigurations that schema validators can't see: things a manifest can be perfectly valid and still get wrong, like a backend that resolves via DNS at startup with no health check to cover the gap.
 
 Schema validators like kubeconform confirm a manifest is structurally valid.
@@ -14,7 +14,7 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 
 This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
 It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
-Of the kinds gwlint parses, only `BackendTrafficPolicy` has a check scoped to it today; `Gateway`, `HTTPRoute`, `GRPCRoute` and `Backend` are read while resolving that check, and nothing reads `ReferenceGrant` yet.
+Of the kinds gwlint parses, only `BackendTrafficPolicy` has a check scoped to it today; the route kinds, `Gateway`, `ListenerSet` and `Backend` are read while resolving that check, and nothing reads `ReferenceGrant` yet.
 Route conflict detection, missing-`ReferenceGrant` detection, retry policy sanity, and missing passive health checks are planned next (Phase 2); see `INSTRUCTION.md` for the full backlog and a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific check set is further along.
 
 ## Scope
@@ -26,7 +26,9 @@ This first pass covers core Gateway API resources plus Envoy Gateway's CRDs spec
 ### `fqdn-backend-cold-start`
 
 Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy covers an `HTTPRoute` or `GRPCRoute` whose `backendRefs` point at an Envoy Gateway `Backend` object with an FQDN endpoint (`spec.endpoints[].fqdn`).
-A policy covers a route either by targeting it directly, or by targeting the `Gateway` the route is attached to via `parentRefs`: Gateway API's policy attachment model applies a Gateway-level policy to every route on that Gateway by default, and this check follows that same resolution, since a shared Gateway-level policy with no health check is at least as common in practice as a route-level one.
+A policy covers a route in any of the ways Envoy Gateway lets it: by naming the route in `targetRef`/`targetRefs`, by selecting it with `targetSelectors`, or by targeting the `Gateway` or `ListenerSet` the route attaches to via `parentRefs`.
+Gateway API's policy attachment hierarchy runs Gateway to ListenerSet to Route, so a Gateway-level policy applies to every route beneath it by default, including routes attached to a `ListenerSet` belonging to that Gateway; this check follows that same resolution, since a shared Gateway-level policy with no health check is at least as common in practice as a route-level one.
+All five route kinds are resolved, not just `HTTPRoute` and `GRPCRoute`: `TCPRoute`, `TLSRoute` and `UDPRoute` carry `backendRefs` too, so they reach FQDN `Backend`s the same way.
 
 **Why this check exists.** An FQDN-based backend endpoint puts Envoy Gateway on the same DNS-resolving cluster path the legacy Envoy `STRICT_DNS` cluster type used: the upstream address resolves at startup, not from a static IP.
 This check is based on a real incident: a cold-start DNS resolution gap on an FQDN-backed route caused 503s before the name had resolved, with no health check in place to route around the gap.
@@ -34,8 +36,7 @@ The fix in that incident, and the remediation this check recommends, is an activ
 
 **What it does not cover (known limitations for this pass):**
 
-- `targetRef`/`targetRefs` naming an `HTTPRoute` or `GRPCRoute` are followed directly, and a `targetRef`/`targetRefs` naming a `Gateway` is resolved to every route whose `parentRefs` attach to that Gateway.
-  `ListenerSet` targets (a newer, less common attachment point) and `TargetSelectors` (label-based targeting) are not resolved.
+- A `targetSelectors` entry scoped to namespaces by label (`namespaces.from: Selector`) is not resolved, since deciding it needs the `Namespace` objects, which a rendered manifest set does not usually contain. `from: Same` (the default) and `from: All` are both honoured.
 - A `backendRef` that omits a namespace resolves in the namespace of the route that references it, which for a Gateway-level policy is not necessarily the policy's own namespace.
   Cross-namespace `backendRef`s are still matched by namespace/name only; `ReferenceGrant` validity is not checked (that's a separate Phase 2 check), so a reference that a real cluster would reject for want of a grant is still reported here.
 - A health check being present does not mean the risk is actually closed: for a `Backend` with only one FQDN endpoint and no redundancy, ejecting or failing that endpoint has nowhere else to route to.
@@ -148,6 +149,7 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 - `examples/failing/direct-route`: policy targets the `HTTPRoute` directly, no health check, FQDN backend.
 - `examples/failing/gateway-level`: policy targets the `Gateway`, no health check, a route attached to that Gateway has an FQDN backend.
 - `examples/failing/cross-namespace-gateway`: platform team's Gateway-level policy in one namespace, an application team's FQDN-backed route in another, attached across namespaces via `parentRefs`.
+- `examples/failing/stream-route`: policy targets a `TCPRoute` authored as `v1alpha2`, with an FQDN backend and no health check.
 - `examples/passing/health-check-configured`: same as `direct-route`, but with a passive health check configured.
 - `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
 - `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.

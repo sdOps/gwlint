@@ -15,16 +15,30 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gatewayv1a3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
+	gatewayv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
 
 // Decoder decodes YAML/JSON Kubernetes manifests into typed Go objects,
-// covering both the built-in Kubernetes API and the Gateway API/Envoy
-// Gateway CRDs gwlint's checks operate on.
+// covering the built-in Kubernetes API, every served version of the Gateway
+// API, and the Envoy Gateway CRDs gwlint's checks operate on.
 var Decoder runtime.Decoder
 
 func init() {
 	clientScheme := scheme.Scheme
-	schemeBuilder := runtime.NewSchemeBuilder(gatewayv1.Install, egv1a1.AddToScheme)
+	// Every served Gateway API version, not just v1: TCPRoute, TLSRoute and
+	// UDPRoute are experimental-channel resources still routinely authored as
+	// v1alpha2, and ReferenceGrant as v1beta1. Registering only v1 means those
+	// manifests fail to decode and land in InvalidObjects, where a check never
+	// sees them and the user sees nothing without --verbose.
+	schemeBuilder := runtime.NewSchemeBuilder(
+		gatewayv1.Install,
+		gatewayv1b1.Install,
+		gatewayv1a2.Install,
+		gatewayv1a3.Install,
+		egv1a1.AddToScheme,
+	)
 	if err := schemeBuilder.AddToScheme(clientScheme); err != nil {
 		panic("gwlint: failed to add Gateway API/Envoy Gateway types to scheme: " + err.Error())
 	}
