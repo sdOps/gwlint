@@ -1,0 +1,27 @@
+# Vulnerabilities govulncheck reports against gwlint that cannot be fixed by
+# upgrading, one ID per line. `mise run vulncheck` fails on anything reported
+# that is not listed here, and also fails on an entry here that is no longer
+# reported, so this file cannot quietly rot.
+#
+# Everything below reaches gwlint only through the package init() of code
+# linked in transitively by kube-linter's lintcontext (helm, and containerd
+# under helm). gwlint does not verify signatures and does not talk to a
+# container runtime, so none of these sit on a path gwlint's own code drives.
+# Re-check each on every kube-linter or helm upgrade.
+
+# golang.org/x/crypto/openpgp is unmaintained and unsafe by design. Reached via
+# helm's provenance verification, which gwlint never invokes. No fix exists;
+# the package is deprecated outright.
+GO-2026-5932
+
+# containerd CRI checkpoint restore: CDI annotation smuggling. No fixed version
+# published. gwlint never runs a CRI checkpoint restore.
+GO-2026-5064
+
+# containerd CRI checkpoint import: local image tag poisoning. No fixed version
+# published. gwlint never imports a checkpoint.
+GO-2026-5338
+
+# containerd CRI checkpoint restore: arbitrary host CRI log file read via
+# symlink following. No fixed version published. Same reachability as above.
+GO-2026-5622
