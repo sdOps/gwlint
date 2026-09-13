@@ -1,0 +1,11 @@
+# Platform team's Gateway-level policy, in its own namespace. No health check.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: edge-gateway-policy
+  namespace: infra
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge-gateway

@@ -67,9 +67,9 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 
 	// A non-nil error is what gives gwlint its non-zero exit code.
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found 2 lint errors")
+	assert.Contains(t, err.Error(), "found 3 lint errors")
 
-	require.Len(t, result.Reports, 2)
+	require.Len(t, result.Reports, 3)
 	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
 	for _, report := range result.Reports {
 		assert.Equal(t, "fqdn-backend-cold-start", report.Check)
@@ -84,6 +84,12 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 		`BackendTrafficPolicy has no health check, but targets Gateway "public-gateway", ` +
 			`whose attached HTTPRoute "billing-api-route" routes to Backend "billing-api-upstream" ` +
 			`with FQDN endpoint "billing-api.example.com"; this backend resolves via DNS at startup ` +
+			`and can 503 before the name resolves`,
+		// A Gateway-level policy reaching a route in another namespace: the
+		// backendRef omits a namespace, so it resolves in the route's.
+		`BackendTrafficPolicy has no health check, but targets Gateway "edge-gateway", ` +
+			`whose attached HTTPRoute "ledger-route" routes to Backend "ledger-upstream" ` +
+			`with FQDN endpoint "ledger.example.com"; this backend resolves via DNS at startup ` +
 			`and can 503 before the name resolves`,
 	}, messagesFrom(result))
 }

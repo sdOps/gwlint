@@ -59,7 +59,11 @@ func checkFunc(lintCtx lintcontext.LintContext, object lintcontext.Object) []dia
 				if !isEnvoyGatewayBackendRef(backendRef) {
 					continue
 				}
-				backendNamespace := policy.Namespace
+				// Gateway API defaults an omitted backendRef namespace to the
+				// namespace of the route doing the referring, which is not
+				// always the policy's: a Gateway-level policy reaches routes in
+				// other namespaces that attach to it via parentRefs.
+				backendNamespace := route.Namespace
 				if backendRef.Namespace != nil {
 					backendNamespace = string(*backendRef.Namespace)
 				}
@@ -111,7 +115,9 @@ func policyTargetRefs(policy *egv1a1.BackendTrafficPolicy) []targetRef {
 // inspect for FQDN-endpoint Backends.
 type resolvedRoute struct {
 	Kind        gatewayv1.Kind
+	Namespace   string
 	Name        gatewayv1.ObjectName
+	ParentRefs  []gatewayv1.ParentReference
 	BackendRefs []gatewayv1.BackendRef
 }
 
@@ -158,8 +164,7 @@ func routesAttachedToGateway(lintCtx lintcontext.LintContext, gatewayNamespace, 
 		if !ok {
 			continue
 		}
-		parentRefs, routeNamespace := parentRefsOf(obj.K8sObject)
-		if parentRefsMatchGateway(parentRefs, routeNamespace, gatewayNamespace, gatewayName) {
+		if parentRefsMatchGateway(route.ParentRefs, route.Namespace, gatewayNamespace, gatewayName) {
 			routes = append(routes, route)
 		}
 	}
@@ -196,7 +201,7 @@ func asResolvedRoute(obj k8sutil.Object) (resolvedRoute, bool) {
 				refs = append(refs, br.BackendRef)
 			}
 		}
-		return resolvedRoute{Kind: "HTTPRoute", Name: gatewayv1.ObjectName(route.Name), BackendRefs: refs}, true
+		return newResolvedRoute("HTTPRoute", route.Namespace, route.Name, route.Spec.ParentRefs, refs), true
 	case *gatewayv1.GRPCRoute:
 		var refs []gatewayv1.BackendRef
 		for _, rule := range route.Spec.Rules {
@@ -204,20 +209,19 @@ func asResolvedRoute(obj k8sutil.Object) (resolvedRoute, bool) {
 				refs = append(refs, br.BackendRef)
 			}
 		}
-		return resolvedRoute{Kind: "GRPCRoute", Name: gatewayv1.ObjectName(route.Name), BackendRefs: refs}, true
+		return newResolvedRoute("GRPCRoute", route.Namespace, route.Name, route.Spec.ParentRefs, refs), true
 	default:
 		return resolvedRoute{}, false
 	}
 }
 
-func parentRefsOf(obj k8sutil.Object) ([]gatewayv1.ParentReference, string) {
-	switch route := obj.(type) {
-	case *gatewayv1.HTTPRoute:
-		return route.Spec.ParentRefs, route.Namespace
-	case *gatewayv1.GRPCRoute:
-		return route.Spec.ParentRefs, route.Namespace
-	default:
-		return nil, ""
+func newResolvedRoute(kind gatewayv1.Kind, namespace, name string, parentRefs []gatewayv1.ParentReference, backendRefs []gatewayv1.BackendRef) resolvedRoute {
+	return resolvedRoute{
+		Kind:        kind,
+		Namespace:   namespace,
+		Name:        gatewayv1.ObjectName(name),
+		ParentRefs:  parentRefs,
+		BackendRefs: backendRefs,
 	}
 }
 

@@ -36,7 +36,8 @@ The fix in that incident, and the remediation this check recommends, is an activ
 
 - `targetRef`/`targetRefs` naming an `HTTPRoute` or `GRPCRoute` are followed directly, and a `targetRef`/`targetRefs` naming a `Gateway` is resolved to every route whose `parentRefs` attach to that Gateway.
   `ListenerSet` targets (a newer, less common attachment point) and `TargetSelectors` (label-based targeting) are not resolved.
-- Cross-namespace `backendRef`s are matched by namespace/name only; `ReferenceGrant` validity is not checked (that's a separate Phase 2 check).
+- A `backendRef` that omits a namespace resolves in the namespace of the route that references it, which for a Gateway-level policy is not necessarily the policy's own namespace.
+  Cross-namespace `backendRef`s are still matched by namespace/name only; `ReferenceGrant` validity is not checked (that's a separate Phase 2 check), so a reference that a real cluster would reject for want of a grant is still reported here.
 - A health check being present does not mean the risk is actually closed: for a `Backend` with only one FQDN endpoint and no redundancy, ejecting or failing that endpoint has nowhere else to route to.
   The check only verifies that a health check exists, not that it provides real failover; a health check on a single-endpoint backend mainly changes the failure mode from slow to fast, it doesn't add availability.
 
@@ -146,6 +147,7 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 
 - `examples/failing/direct-route`: policy targets the `HTTPRoute` directly, no health check, FQDN backend.
 - `examples/failing/gateway-level`: policy targets the `Gateway`, no health check, a route attached to that Gateway has an FQDN backend.
+- `examples/failing/cross-namespace-gateway`: platform team's Gateway-level policy in one namespace, an application team's FQDN-backed route in another, attached across namespaces via `parentRefs`.
 - `examples/passing/health-check-configured`: same as `direct-route`, but with a passive health check configured.
 - `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
 - `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.

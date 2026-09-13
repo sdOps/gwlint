@@ -1,0 +1,10 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: ledger-upstream
+  namespace: ledger
+spec:
+  endpoints:
+    - fqdn:
+        hostname: ledger.example.com
+        port: 443

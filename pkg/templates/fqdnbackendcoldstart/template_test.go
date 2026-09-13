@@ -415,3 +415,67 @@ func (s *FQDNBackendColdStartTestSuite) TestPassesWhenPolicyHasNoTargetRefs() {
 
 	s.expectNoDiagnostics()
 }
+
+// A Gateway-level policy reaches routes in other namespaces that attach to it
+// via parentRefs. Gateway API defaults an omitted backendRef namespace to the
+// route's namespace, not the policy's, so the two below pin that down: the
+// check used to look the Backend up in the policy's namespace, which silently
+// found nothing, or found an unrelated object of the same name.
+func (s *FQDNBackendColdStartTestSuite) addCrossNamespaceSetup() {
+	route := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "ledger-route", Namespace: "ledger"},
+		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{
+				ParentRefs: []gatewayv1.ParentReference{{
+					Namespace: nsPtr("infra"),
+					Name:      "edge-gateway",
+				}},
+			},
+			Rules: []gatewayv1.HTTPRouteRule{{
+				BackendRefs: []gatewayv1.HTTPBackendRef{{
+					// No namespace: defaults to the route's, "ledger".
+					BackendRef: gatewayv1.BackendRef{BackendObjectReference: envoyBackendRef("ledger-upstream", "")},
+				}},
+			}},
+		},
+	}
+	route.SetGroupVersionKind(routeGVK("HTTPRoute"))
+	s.ctx.AddObject("ledger-route", route)
+	s.addBackend("ledger-upstream", "ledger", true)
+
+	policy := &egv1a1.BackendTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: "infra"},
+		Spec: egv1a1.BackendTrafficPolicySpec{
+			PolicyTargetReferences: egv1a1.PolicyTargetReferences{
+				TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
+					{LocalPolicyTargetReference: localTargetRef("Gateway", "edge-gateway")},
+				},
+			},
+		},
+	}
+	policy.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackendTrafficPolicy))
+	s.ctx.AddObject(policyName, policy)
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestResolvesBackendInRouteNamespaceNotPolicyNamespace() {
+	s.addCrossNamespaceSetup()
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("edge-gateway", "HTTPRoute", "ledger-route"), "ledger-upstream"))
+}
+
+// With an unrelated Backend of the same name sitting in the policy's namespace,
+// resolving against the wrong namespace does not just miss: it names the wrong
+// object and reports its hostname.
+func (s *FQDNBackendColdStartTestSuite) TestIgnoresSameNamedBackendInPolicyNamespace() {
+	s.addCrossNamespaceSetup()
+	decoy := &egv1a1.Backend{
+		ObjectMeta: metav1.ObjectMeta{Name: "ledger-upstream", Namespace: "infra"},
+		Spec: egv1a1.BackendSpec{Endpoints: []egv1a1.BackendEndpoint{
+			{FQDN: &egv1a1.FQDNEndpoint{Hostname: "unrelated.internal", Port: 443}},
+		}},
+	}
+	decoy.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackend))
+	s.ctx.AddObject("decoy-backend", decoy)
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("edge-gateway", "HTTPRoute", "ledger-route"), "ledger-upstream"))
+}
