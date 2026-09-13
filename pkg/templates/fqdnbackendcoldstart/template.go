@@ -23,6 +23,7 @@ import (
 	"golang.stackrox.io/kube-linter/pkg/templates"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/sdOps/gwlint/pkg/gatewayapi"
 	gwobjectkinds "github.com/sdOps/gwlint/pkg/objectkinds"
 )
 
@@ -106,7 +107,7 @@ func hasHealthCheck(policy *egv1a1.BackendTrafficPolicy) bool {
 // the clause leading into the Backend name in the diagnostic message. For a
 // Gateway or ListenerSet targetRef the route carrying the FQDN backend is
 // named too, since the policy itself never mentions it.
-func describeCoverage(ref targetRef, route resolvedRoute) string {
+func describeCoverage(ref targetRef, route gatewayapi.Route) string {
 	switch {
 	case ref.viaSelector:
 		return fmt.Sprintf("selects %s %q, which routes to", route.Kind, route.Name)

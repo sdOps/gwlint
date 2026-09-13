@@ -1,0 +1,14 @@
+# parentRefs names a Gateway that does not exist. Nothing rejects this: the
+# route is simply never programmed and its traffic is never served.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: reporting-route
+  namespace: reporting
+spec:
+  parentRefs:
+    - name: reportng-gateway
+  rules:
+    - backendRefs:
+        - name: reporting-api
+          port: 8080

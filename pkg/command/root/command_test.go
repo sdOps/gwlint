@@ -11,10 +11,9 @@ import (
 	"github.com/sdOps/gwlint/pkg/command/root"
 	gwversion "github.com/sdOps/gwlint/pkg/version"
 
-	// Blank-imported so the check template registers itself via init(), the
-	// same way cmd/gwlint wires it up. "templates list" reports on that
-	// registry, so without this it would have nothing to list.
-	_ "github.com/sdOps/gwlint/pkg/templates/fqdnbackendcoldstart"
+	// Blank-imported so every check template registers itself via init(), the
+	// same way cmd/gwlint wires it up.
+	_ "github.com/sdOps/gwlint/pkg/templates/all"
 )
 
 // runRoot runs the root command and captures os.Stdout. kube-linter's own

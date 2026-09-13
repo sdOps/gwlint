@@ -11,10 +11,9 @@ import (
 	"github.com/sdOps/gwlint/pkg/builtinchecks"
 	gwobjectkinds "github.com/sdOps/gwlint/pkg/objectkinds"
 
-	// Blank-imported so the check template registers itself via init(), the
-	// same way cmd/gwlint wires it up. Without it the registry cannot
-	// instantiate the check.
-	_ "github.com/sdOps/gwlint/pkg/templates/fqdnbackendcoldstart"
+	// Blank-imported so every check template registers itself via init(), the
+	// same way cmd/gwlint wires it up.
+	_ "github.com/sdOps/gwlint/pkg/templates/all"
 )
 
 func checkByName(t *testing.T, name string) config.Check {

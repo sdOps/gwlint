@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/sdOps/gwlint/pkg/gatewayapi"
 	gwobjectkinds "github.com/sdOps/gwlint/pkg/objectkinds"
 )
 
@@ -37,7 +38,7 @@ func policyTargetRefs(policy *egv1a1.BackendTrafficPolicy) []targetRef {
 // so the diagnostic can say how the policy gets there.
 type coveredRoute struct {
 	ref   targetRef
-	route resolvedRoute
+	route gatewayapi.Route
 	// inherited marks coverage that came down the attachment hierarchy from a
 	// Gateway or ListenerSet rather than naming the route. Gateway API lets a
 	// more specific policy override an inherited one, so only inherited
@@ -103,7 +104,7 @@ func isRouteKind(kind gatewayv1.Kind) bool {
 // API's attachment hierarchy runs Gateway to ListenerSet to Route and a
 // Gateway-level policy applies to everything beneath it by default. A
 // sectionName on a Gateway targetRef narrows that to one listener.
-func resolveRoutes(lintCtx lintcontext.LintContext, policyNamespace string, ref targetRef) []resolvedRoute {
+func resolveRoutes(lintCtx lintcontext.LintContext, policyNamespace string, ref targetRef) []gatewayapi.Route {
 	switch string(ref.Kind) {
 	case gwobjectkinds.Gateway:
 		return routesAttachedToGateway(lintCtx, policyNamespace, string(ref.Name), ref.SectionName)
@@ -117,13 +118,13 @@ func resolveRoutes(lintCtx lintcontext.LintContext, policyNamespace string, ref 
 		if route == nil {
 			return nil
 		}
-		return []resolvedRoute{*route}
+		return []gatewayapi.Route{*route}
 	}
 }
 
 // resolveSelectedRoutes returns the routes a policy's targetSelectors match.
 // Envoy Gateway selects by kind plus labels, scoped to a set of namespaces.
-func resolveSelectedRoutes(lintCtx lintcontext.LintContext, policyNamespace string, sel egv1a1.TargetSelector) []resolvedRoute {
+func resolveSelectedRoutes(lintCtx lintcontext.LintContext, policyNamespace string, sel egv1a1.TargetSelector) []gatewayapi.Route {
 	if sel.Group != nil && string(*sel.Group) != gatewayv1.GroupName {
 		return nil
 	}
@@ -139,9 +140,9 @@ func resolveSelectedRoutes(lintCtx lintcontext.LintContext, policyNamespace stri
 		return nil
 	}
 
-	var routes []resolvedRoute
+	var routes []gatewayapi.Route
 	for _, obj := range lintCtx.Objects() {
-		route, ok := asResolvedRoute(obj.K8sObject)
+		route, ok := gatewayapi.AsRoute(obj.K8sObject)
 		if !ok || route.Kind != sel.Kind {
 			continue
 		}
@@ -167,12 +168,9 @@ func namespaceSelected(ns *egv1a1.TargetSelectorNamespaces, policyNamespace, rou
 	return ns.From == egv1a1.TargetNamespaceFromAll
 }
 
-func findRoute(lintCtx lintcontext.LintContext, namespace, name string, kind gatewayv1.Kind) *resolvedRoute {
-	for _, obj := range lintCtx.Objects() {
-		if obj.K8sObject.GetNamespace() != namespace || obj.K8sObject.GetName() != name {
-			continue
-		}
-		if route, ok := asResolvedRoute(obj.K8sObject); ok && route.Kind == kind {
+func findRoute(lintCtx lintcontext.LintContext, namespace, name string, kind gatewayv1.Kind) *gatewayapi.Route {
+	for _, route := range gatewayapi.Routes(lintCtx) {
+		if route.Kind == kind && route.Namespace == namespace && string(route.Name) == name {
 			return &route
 		}
 	}
@@ -182,7 +180,7 @@ func findRoute(lintCtx lintcontext.LintContext, namespace, name string, kind gat
 // routesAttachedToGateway returns every route attached to the given Gateway,
 // directly or through a ListenerSet whose parentRef names that Gateway. A
 // non-nil listener narrows it to routes attached to that listener.
-func routesAttachedToGateway(lintCtx lintcontext.LintContext, gatewayNamespace, gatewayName string, listener *gatewayv1.SectionName) []resolvedRoute {
+func routesAttachedToGateway(lintCtx lintcontext.LintContext, gatewayNamespace, gatewayName string, listener *gatewayv1.SectionName) []gatewayapi.Route {
 	routes := routesAttachedTo(lintCtx, gwobjectkinds.Gateway, gatewayNamespace, gatewayName, listener)
 
 	seen := make(map[routeKey]struct{}, len(routes))
@@ -211,21 +209,20 @@ type routeKey struct {
 	name      gatewayv1.ObjectName
 }
 
-func keyOf(r resolvedRoute) routeKey {
+func keyOf(r gatewayapi.Route) routeKey {
 	return routeKey{kind: r.Kind, namespace: r.Namespace, name: r.Name}
 }
 
 // routesAttachedTo returns every route whose parentRefs name the given Gateway
 // or ListenerSet, optionally narrowed to one listener section.
-func routesAttachedTo(lintCtx lintcontext.LintContext, parentKind, parentNamespace, parentName string, listener *gatewayv1.SectionName) []resolvedRoute {
-	var routes []resolvedRoute
-	for _, obj := range lintCtx.Objects() {
-		route, ok := asResolvedRoute(obj.K8sObject)
-		if !ok {
-			continue
-		}
-		if parentRefsMatch(route.ParentRefs, route.Namespace, parentKind, parentNamespace, parentName, listener) {
-			routes = append(routes, route)
+func routesAttachedTo(lintCtx lintcontext.LintContext, parentKind, parentNamespace, parentName string, listener *gatewayv1.SectionName) []gatewayapi.Route {
+	var routes []gatewayapi.Route
+	for _, route := range gatewayapi.Routes(lintCtx) {
+		for _, parent := range gatewayapi.ParentsOf(route) {
+			if parent.Matches(parentKind, parentNamespace, parentName) && parent.CoversListener(listener) {
+				routes = append(routes, route)
+				break
+			}
 		}
 	}
 	return routes
@@ -262,38 +259,6 @@ func listenerSetsOfGateway(lintCtx lintcontext.LintContext, gatewayNamespace, ga
 	return sets
 }
 
-// parentRefsMatch reports whether any parentRef names the given parent. An
-// omitted parentRef kind defaults to Gateway and an omitted namespace to the
-// route's own, both per Gateway API. When listener is non-nil the policy only
-// covers that listener, and a parentRef matches if it names the same listener
-// or names none at all, which attaches the route to every listener.
-func parentRefsMatch(parentRefs []gatewayv1.ParentReference, routeNamespace, parentKind, parentNamespace, parentName string, listener *gatewayv1.SectionName) bool {
-	for _, p := range parentRefs {
-		if p.Group != nil && string(*p.Group) != gatewayv1.GroupName {
-			continue
-		}
-		kind := gwobjectkinds.Gateway
-		if p.Kind != nil {
-			kind = string(*p.Kind)
-		}
-		if kind != parentKind {
-			continue
-		}
-		ns := routeNamespace
-		if p.Namespace != nil {
-			ns = string(*p.Namespace)
-		}
-		if ns != parentNamespace || string(p.Name) != parentName {
-			continue
-		}
-		if listener != nil && p.SectionName != nil && *p.SectionName != *listener {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
 // sectionCoversRule reports whether a policy targetRef's sectionName covers a
 // given route rule. No sectionName covers the whole route; a sectionName names
 // one rule, and a rule with no name of its own cannot be the one named.
@@ -310,7 +275,7 @@ func sectionCoversRule(section, rule *gatewayv1.SectionName) bool {
 // specific configuration takes effect", so a route-level policy that does
 // configure a health check closes the gap a Gateway-level one leaves open, and
 // reporting the Gateway-level policy for that route would be a false positive.
-func isOverridden(lintCtx lintcontext.LintContext, route resolvedRoute, rule *gatewayv1.SectionName, self *egv1a1.BackendTrafficPolicy) bool {
+func isOverridden(lintCtx lintcontext.LintContext, route gatewayapi.Route, rule *gatewayv1.SectionName, self *egv1a1.BackendTrafficPolicy) bool {
 	for _, obj := range lintCtx.Objects() {
 		other, ok := obj.K8sObject.(*egv1a1.BackendTrafficPolicy)
 		if !ok || other == self || !hasHealthCheck(other) {

@@ -8,7 +8,7 @@ metadata:
   namespace: default
 spec:
   parentRefs:
-    - name: main-gateway
+    - name: service-gateway
   rules:
     - matches:
         - path:

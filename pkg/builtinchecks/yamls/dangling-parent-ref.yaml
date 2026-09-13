@@ -1,0 +1,11 @@
+name: "dangling-parent-ref"
+description: "Flag routes whose parentRefs name a Gateway or ListenerSet that is not present, so the route never attaches and its traffic is never served"
+remediation: "Correct the parentRef to name an existing Gateway or ListenerSet, or include the manifests that define it in the same gwlint invocation. Gateway API does not reject a parentRef that resolves to nothing; the route is simply never programmed."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "dangling-parent-ref"

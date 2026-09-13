@@ -38,8 +38,10 @@ cmd/gwlint/                       entry point; blank-imports each check package 
 pkg/command/root/                 CLI assembly; reuses kube-linter's templates subcommand as-is
 pkg/command/lint/                 the lint command, plus merge.go for cross-directory context merging
 pkg/decoder/                      runtime.Decoder covering core k8s + every served Gateway API version + Envoy Gateway
+pkg/gatewayapi/                   shared route model: flattens every route kind and version into one shape
 pkg/objectkinds/                  kube-linter object-kind registrations (gatewayapi.go, backend.go, backendtrafficpolicy.go)
 pkg/builtinchecks/                embedded default check configs; yamls/<check-name>.yaml per check
+pkg/templates/all/                blank-imports every check; import this, not individual check packages
 pkg/templates/<checkname>/        one package per check
 pkg/version/                      gwlint's version string
 examples/failing/<scenario>/      manifests a check must flag
@@ -78,7 +80,9 @@ Match kube-linter's own Go conventions for anything that may be upstreamed:
 - One package per check, under `pkg/templates/<checkname>/`.
 - The same `check.Template` and `check.Func` shapes, registered via `templates.Register` in `init()`.
 - A `check.Template` registration alone does not make the engine run a check.
-  It also needs a `config.Check` entry in `pkg/builtinchecks/yamls/`, and the check package must be blank-imported from `cmd/gwlint/main.go`.
+  It also needs a `config.Check` entry in `pkg/builtinchecks/yamls/`, and the check package must be added to `pkg/templates/all`.
+- Route extraction belongs in `pkg/gatewayapi`, not in a check package. More than one check walks parentRefs and backendRefs.
+- A check that resolves references needs a guard for the partial manifest set: linting routes without the chart that defines the Gateway is normal, so judge a reference only once the set contains something of that kind to judge against.
 - Comments explain why, not what, at the density kube-linter's own templates use.
 - No speculative abstraction. Generalize on the second or third real case, not the first.
 
@@ -115,6 +119,7 @@ Hard-won, and each one was a real bug:
 ## Testing
 
 - Every check needs a failing case and a passing case at minimum, plus a scenario directory under `examples/`.
+- Each `examples/` scenario must be self-contained and demonstrate exactly one finding, both on its own and when the whole tree is linted at once. Adding a check can light up other scenarios that were previously incomplete; check every directory in isolation afterwards.
 - Unit tests use `lintcontext/mocks`. **`MockLintContext.Objects()` iterates a map**, so never index into it or assert on diagnostic ordering.
   `Validate` compares with `ElementsMatch`, which is order-independent.
 - End-to-end tests in `pkg/command/lint/command_test.go` run the real command over `examples/`. Adding an example means updating the expected finding count there.

@@ -11,9 +11,9 @@ import (
 
 	gwversion "github.com/sdOps/gwlint/pkg/version"
 
-	// Blank-imported so the check template registers itself via init(), the
+	// Blank-imported so every check template registers itself via init(), the
 	// same way cmd/gwlint wires it up.
-	_ "github.com/sdOps/gwlint/pkg/templates/fqdnbackendcoldstart"
+	_ "github.com/sdOps/gwlint/pkg/templates/all"
 )
 
 // runLint runs the real lint command over the given paths and returns the
@@ -66,13 +66,13 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 
 	// A non-nil error is what gives gwlint its non-zero exit code.
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found 4 lint errors")
+	assert.Contains(t, err.Error(), "found 5 lint errors")
 
-	require.Len(t, result.Reports, 4)
+	require.Len(t, result.Reports, 5)
 	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
 	for _, report := range result.Reports {
-		assert.Equal(t, "fqdn-backend-cold-start", report.Check)
-		assert.Contains(t, report.Remediation, "health check")
+		assert.Contains(t, []string{"fqdn-backend-cold-start", "dangling-parent-ref"}, report.Check)
+		assert.NotEmpty(t, report.Remediation)
 		assert.NotEmpty(t, report.Object.Metadata.FilePath)
 	}
 
@@ -95,6 +95,9 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 		`BackendTrafficPolicy has no health check, but targets TCPRoute "database-route", ` +
 			`which routes to Backend "database-upstream" with FQDN endpoint "database.example.com"; ` +
 			`this backend resolves via DNS at startup and can 503 before the name resolves`,
+		// A parentRef naming a Gateway that is not there.
+		`HTTPRoute "reporting-route" attaches to Gateway "reportng-gateway" in namespace "reporting", ` +
+			`which is not present; the route will never be programmed and its traffic will not be served`,
 	}, messagesFrom(result))
 }
 
@@ -203,16 +206,14 @@ func TestPlainOutputReportsWhatWasScanned(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, string(contents), "No lint errors found.")
-	assert.Regexp(t, `Checked \d+ BackendTrafficPolicy objects \(\d+ objects loaded from \d+ files\)\.`, string(contents))
+	assert.Regexp(t, `Checked \d+ objects: .*BackendTrafficPolicy.* \(\d+ objects loaded from \d+ files\)\.`, string(contents))
 }
 
 // The case the summary exists for: objects loaded, but none a check applies to.
 func TestPlainOutputCallsOutWhenNothingIsInScope(t *testing.T) {
+	// A Service alone: nothing any check is scoped to.
 	dir := t.TempDir()
-	source := examplePath(t, "passing", "service-backend")
-	for _, name := range []string{"httproute.yaml", "service.yaml"} {
-		copyManifest(t, source, dir, name)
-	}
+	copyManifest(t, examplePath(t, "passing", "service-backend"), dir, "service.yaml")
 	outPath := filepath.Join(t.TempDir(), "result.txt")
 
 	cmd := Command()
@@ -224,7 +225,9 @@ func TestPlainOutputCallsOutWhenNothingIsInScope(t *testing.T) {
 	contents, err := os.ReadFile(outPath) //nolint:gosec // test-controlled path
 	require.NoError(t, err)
 
-	assert.Contains(t, string(contents), "No BackendTrafficPolicy objects found, so nothing was checked")
+	assert.Contains(t, string(contents), "found, so nothing was checked")
+	assert.Contains(t, string(contents), "BackendTrafficPolicy")
+	assert.Contains(t, string(contents), "HTTPRoute")
 }
 
 // The counts have to be in the machine-readable output too, and adding them
@@ -233,9 +236,12 @@ func TestJSONOutputCarriesTheScanSummary(t *testing.T) {
 	result, err := runLint(t, examplePath(t, "failing"))
 	require.Error(t, err)
 
-	assert.Equal(t, 4, result.Scanned.Checked, "one BackendTrafficPolicy per failing scenario")
-	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4}, result.Scanned.CheckedByKind)
-	assert.Equal(t, []string{"BackendTrafficPolicy"}, result.Scanned.LooksFor)
+	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4, "HTTPRoute": 4, "TCPRoute": 1},
+		result.Scanned.CheckedByKind, "one policy per failing scenario, plus every route")
+	assert.Equal(t, 9, result.Scanned.Checked)
+	assert.Equal(t,
+		[]string{"BackendTrafficPolicy", "GRPCRoute", "HTTPRoute", "TCPRoute", "TLSRoute", "UDPRoute"},
+		result.Scanned.LooksFor)
 	assert.Positive(t, result.Scanned.Objects)
 	assert.Positive(t, result.Scanned.Files)
 	assert.Zero(t, result.Scanned.Unparsed)

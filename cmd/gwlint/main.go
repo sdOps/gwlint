@@ -8,8 +8,8 @@ import (
 
 	"github.com/sdOps/gwlint/pkg/command/root"
 
-	// Blank-imported so the check template registers itself via init().
-	_ "github.com/sdOps/gwlint/pkg/templates/fqdnbackendcoldstart"
+	// Blank-imported so every check template registers itself via init().
+	_ "github.com/sdOps/gwlint/pkg/templates/all"
 )
 
 func main() {

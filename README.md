@@ -14,14 +14,35 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 
 This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
 It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
-Of the kinds gwlint parses, only `BackendTrafficPolicy` has a check scoped to it today; the route kinds, `Gateway`, `ListenerSet` and `Backend` are read while resolving that check, and nothing reads `ReferenceGrant` yet.
+Checks are scoped to `BackendTrafficPolicy` and to all five route kinds; `Gateway`, `ListenerSet` and `Backend` are read while resolving them, and nothing reads `ReferenceGrant` yet.
 Route conflict detection, missing-`ReferenceGrant` detection, retry policy sanity, and missing passive health checks are planned next (Phase 2); see `INSTRUCTION.md` for the full backlog and a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific check set is further along.
 
 ## Scope
 
-This first pass covers core Gateway API resources plus Envoy Gateway's CRDs specifically, not every Gateway API implementation's vendor extensions.
+Checks fall into two groups.
+Vendor-neutral checks use only core Gateway API types and work against any implementation; `dangling-parent-ref` is one.
+Vendor-specific checks key off an implementation's own CRDs, and today that means Envoy Gateway's; `fqdn-backend-cold-start` is one.
+This first pass covers core Gateway API resources plus Envoy Gateway's CRDs specifically, not every implementation's vendor extensions.
 
 ## Checks
+
+### `dangling-parent-ref`
+
+Flags a route whose `parentRefs` name a `Gateway` or `ListenerSet` that is not present.
+
+A route attaches to a Gateway by naming it, and nothing rejects a name that does not resolve.
+The manifests stay schema-valid, the apply succeeds, and the route is simply never programmed, so its traffic is never served.
+A typo or a rename on the Gateway side produces exactly this, silently.
+
+This check is vendor-neutral: it uses only core Gateway API types and works against any implementation.
+It covers all five route kinds, and resolves a `parentRef` the way Gateway API does, defaulting an omitted kind to `Gateway` and an omitted namespace to the route's own.
+
+**What it does not cover:** linting a routes-only manifest set is normal, since the Gateway usually lives in another chart or repo.
+If the set contains no `Gateway` or `ListenerSet` at all, every `parentRef` would look dangling, so the check stays quiet rather than flagging everything.
+Pass the Gateway's manifests in the same invocation to get real coverage; see "Linting across multiple charts, directories, or repos" below.
+A `parentRef` into another API group is left alone, since it belongs to some other implementation's attachment model.
+
+**Remediation:** correct the `parentRef`, or include the manifests that define the Gateway in the same `gwlint` invocation.
 
 ### `fqdn-backend-cold-start`
 
@@ -167,6 +188,8 @@ Linting two genuinely unrelated environments or clusters together in one invocat
 
 See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario:
 
+- `examples/failing/dangling-parent-ref`: a route whose `parentRefs` names a Gateway that is not there.
+- `examples/passing/parent-ref-resolves`: the same shape, with the Gateway present.
 - `examples/failing/direct-route`: policy targets the `HTTPRoute` directly, no health check, FQDN backend.
 - `examples/failing/gateway-level`: policy targets the `Gateway`, no health check, a route attached to that Gateway has an FQDN backend.
 - `examples/failing/cross-namespace-gateway`: platform team's Gateway-level policy in one namespace, an application team's FQDN-backed route in another, attached across namespaces via `parentRefs`.
