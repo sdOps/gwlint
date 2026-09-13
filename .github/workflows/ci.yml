@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: nothing here writes to the repo.
+permissions:
+  contents: read
+
+# A new push supersedes an in-flight run on the same ref, except on main,
+# where every commit's result is worth keeping.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # mise.toml pins Go and golangci-lint, so CI and a developer's machine
+      # run the same versions of both.
+      - uses: jdx/mise-action@v4
+
+      - name: Cache Go modules and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-test-
+
+      - run: mise run build
+      - run: mise run vet
+      - run: mise run test-race
+
+      # The unit tests cover the check through a lint context; this runs the
+      # compiled binary over real manifests, which is what a user actually does.
+      - run: mise run lint-examples
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+
+      - name: Cache Go modules and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-lint-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-lint-
+
+      # golangci-lint v2 splits these: run reports linter findings, fmt
+      # reports formatting. Both have to pass.
+      - run: mise run fmt-check
+      - run: mise run lint
+
+      # mise.toml and go.mod both name a Go version; they must agree.
+      - run: mise run check-go-version
+
+  tidy:
+    name: go.mod is tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v6
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-tidy-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-tidy-
+
+      - run: go mod tidy
+      - name: Fail if go.mod or go.sum changed
+        run: git diff --exit-code go.mod go.sum
+
+  vulncheck:
+    name: Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+
+      - name: Cache Go modules and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-vuln-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-vuln-
+
+      # Fails on anything reachable that is not recorded in
+      # .govulncheck-allowlist, and on an allowlist entry that is now stale.
+      - run: mise run vulncheck

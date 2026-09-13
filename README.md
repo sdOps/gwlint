@@ -114,14 +114,21 @@ Each scenario can be linted on its own, or together (`gwlint lint ./examples/fai
 gwlint pins its Go toolchain and lint tooling via [mise](https://mise.jdx.dev/) (see `mise.toml`), which also defines the common dev commands as mise tasks:
 
 ```sh
-mise install            # install the pinned Go toolchain and golangci-lint
+mise install             # install the pinned Go toolchain and golangci-lint
 mise run build           # build ./gwlint
 mise run test            # go test ./...
+mise run test-race       # go test -race ./...
 mise run vet             # go vet ./...
 mise run lint            # golangci-lint run ./...
-mise run check           # build, vet, test, and lint together
+mise run fmt             # apply gofmt and goimports formatting
+mise run fmt-check       # fail if anything is unformatted
+mise run vulncheck       # govulncheck, gated by .govulncheck-allowlist
+mise run check           # build, vet, version check, fmt-check, test, and lint together
 mise run lint-examples   # build, then run gwlint against examples/failing and examples/passing
 ```
+
+`mise run check` is the local gate; CI runs the same tasks, with the pinned tool versions from the same `mise.toml`.
+Note that golangci-lint v2 splits linting and formatting: `golangci-lint run` does not report formatting problems, only `golangci-lint fmt` does, which is why `fmt-check` exists as its own task.
 
 Equivalent plain commands, if you'd rather not use the tasks:
 
@@ -130,7 +137,33 @@ mise exec -- go build -o gwlint ./cmd/gwlint
 mise exec -- go test ./...
 mise exec -- go vet ./...
 mise exec -- golangci-lint run ./...
+mise exec -- golangci-lint fmt --diff ./...
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in four parallel jobs:
+
+- **Build and test** builds the binary, runs `go vet`, runs the tests under the race detector, and then runs the compiled binary against `examples/failing` and `examples/passing`, checking each exits the way it should.
+  The unit tests exercise the check through a lint context; this last step is the only thing that proves the shipped binary works on real manifests.
+- **Lint** runs `golangci-lint run` and `golangci-lint fmt --diff`, then checks that `mise.toml` and `go.mod` still name the same Go version.
+- **go.mod is tidy** runs `go mod tidy` and fails if `go.mod` or `go.sum` changed.
+- **Vulnerabilities** runs `govulncheck` through `scripts/vulncheck.sh`.
+
+CI installs its toolchain with mise from the same `mise.toml` a developer uses, so a green local `mise run check` means the same tool versions ran locally as in CI.
+CI runs on Linux only; nothing currently exercises the macOS or Windows paths.
+
+The Go version lives in `go.mod`, and `mise.toml` pins the toolchain to the same number; `mise run check-go-version` fails if they drift apart.
+`.golangci.yml` deliberately sets no `go:` version of its own, since golangci-lint reads it from `go.mod`.
+
+### Known vulnerabilities
+
+`scripts/vulncheck.sh` fails on any vulnerability govulncheck can reach from gwlint's code unless it is listed in `.govulncheck-allowlist`, and equally fails on an allowlist entry that is no longer reported, so the file cannot quietly go stale.
+
+Four entries are allowlisted today, all in `golang.org/x/crypto/openpgp` and `github.com/containerd/containerd`, and none of them has a fixed version published upstream.
+They reach gwlint only through the package `init()` of code linked in transitively by kube-linter's `lintcontext` (helm, and containerd beneath it).
+gwlint verifies no signatures and talks to no container runtime, so nothing gwlint's own code does drives those paths.
+Each entry carries its reasoning in the allowlist file; re-check them whenever kube-linter or helm is upgraded.
 
 ### A note on dependency versions
 
