@@ -1,27 +1,40 @@
-# Vulnerabilities govulncheck reports against gwlint that cannot be fixed by
-# upgrading, one ID per line. `mise run vulncheck` fails on anything reported
-# that is not listed here, and also fails on an entry here that is no longer
+# Vulnerabilities govulncheck reports against gwlint that we cannot currently
+# act on, one ID per line. `mise run vulncheck` fails on anything reported that
+# is not listed here, and also fails on an entry here that is no longer
 # reported, so this file cannot quietly rot.
 #
 # Everything below reaches gwlint only through the package init() of code
-# linked in transitively by kube-linter's lintcontext (helm, and containerd
-# under helm). gwlint does not verify signatures and does not talk to a
-# container runtime, so none of these sit on a path gwlint's own code drives.
-# Re-check each on every kube-linter or helm upgrade.
+# linked in transitively by kube-linter's lintcontext:
+#
+#   pkg/command/lint -> kube-linter/pkg/lintcontext -> k8s-manifests-lib
+#     -> helm.sh/helm/v3/pkg/registry -> containerd/remotes
+#
+# gwlint verifies no signatures and talks to no container runtime, so none of
+# these sit on a path gwlint's own code drives. Re-check each on every
+# kube-linter or helm upgrade.
 
-# golang.org/x/crypto/openpgp is unmaintained and unsafe by design. Reached via
-# helm's provenance verification, which gwlint never invokes. No fix exists;
-# the package is deprecated outright.
+# golang.org/x/crypto/openpgp is unmaintained and unsafe by design. No CVE
+# alias and no fix: the package is deprecated outright, not patched. Reached
+# via helm's provenance verification, which gwlint never invokes.
 GO-2026-5932
 
-# containerd CRI checkpoint restore: CDI annotation smuggling. No fixed version
-# published. gwlint never runs a CRI checkpoint restore.
+# The three below are CVE-2026-53492, CVE-2026-50195 and CVE-2026-53489, all
+# fixed in containerd 2.1.9 / 2.2.5 / 2.3.2 and not backported to the 1.7 line.
+# Those fixes are on the github.com/containerd/containerd/v2 module path, which
+# minimum version selection cannot reach from the v1 path we are on: helm
+# v3.20.0 requires github.com/containerd/containerd v1.7.x, and go.mod pins helm
+# to v3.20.0 to match kube-linter v0.8.3 (see "A note on dependency versions" in
+# the README). We track containerd 1.7.35, the newest of that line.
+#
+# The real blocker is helm, not containerd. These three come off the allowlist
+# when helm moves to containerd v2 and the pin can follow.
+
+# containerd CRI checkpoint restore: CDI annotation smuggling (CVE-2026-53492).
 GO-2026-5064
 
-# containerd CRI checkpoint import: local image tag poisoning. No fixed version
-# published. gwlint never imports a checkpoint.
+# containerd CRI checkpoint import: local image tag poisoning (CVE-2026-50195).
 GO-2026-5338
 
 # containerd CRI checkpoint restore: arbitrary host CRI log file read via
-# symlink following. No fixed version published. Same reachability as above.
+# symlink following (CVE-2026-53489).
 GO-2026-5622

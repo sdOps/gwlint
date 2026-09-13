@@ -160,8 +160,11 @@ The Go version lives in `go.mod`, and `mise.toml` pins the toolchain to the same
 
 `scripts/vulncheck.sh` fails on any vulnerability govulncheck can reach from gwlint's code unless it is listed in `.govulncheck-allowlist`, and equally fails on an allowlist entry that is no longer reported, so the file cannot quietly go stale.
 
-Four entries are allowlisted today, all in `golang.org/x/crypto/openpgp` and `github.com/containerd/containerd`, and none of them has a fixed version published upstream.
-They reach gwlint only through the package `init()` of code linked in transitively by kube-linter's `lintcontext` (helm, and containerd beneath it).
+Four entries are allowlisted today: one in `golang.org/x/crypto/openpgp`, which is deprecated outright rather than patched, and three in `github.com/containerd/containerd` (CVE-2026-53492, CVE-2026-50195, CVE-2026-53489).
+The containerd three are fixed in 2.1.9 / 2.2.5 / 2.3.2 with no backport to the 1.7 line, and those fixes sit on the `github.com/containerd/containerd/v2` module path, which minimum version selection cannot reach from the v1 path gwlint is on.
+helm v3.20.0 requires `containerd` v1.7.x, and `go.mod` pins helm to v3.20.0 to match kube-linter (see below), so helm is the actual blocker; the three come off the allowlist once helm moves to containerd v2.
+
+All four reach gwlint only through the package `init()` of code linked in transitively by kube-linter's `lintcontext`, via helm's OCI registry support and containerd beneath it.
 gwlint verifies no signatures and talks to no container runtime, so nothing gwlint's own code does drives those paths.
 Each entry carries its reasoning in the allowlist file; re-check them whenever kube-linter or helm is upgraded.
 
