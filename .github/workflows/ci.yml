@@ -17,13 +17,39 @@ concurrency:
 
 jobs:
   test:
-    name: Build and test
+    name: Test (${{ matrix.os }})
+    strategy:
+      # Report every platform's result; one failing should not mask the others.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # setup-go rather than mise here: mise does not document Windows support,
+      # and go.mod is where the Go version lives anyway. mise.toml is held to
+      # the same number by the check-go-version task in the lint job, so the
+      # pin stays single-sourced.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  examples:
+    name: Examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      # mise.toml pins Go and golangci-lint, so CI and a developer's machine
-      # run the same versions of both.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
       - name: Cache Go modules and build output
@@ -32,15 +58,13 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-test-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-go-test-
+          key: ${{ runner.os }}-go-examples-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-examples-
 
-      - run: mise run build
-      - run: mise run vet
-      - run: mise run test-race
-
-      # The unit tests cover the check through a lint context; this runs the
-      # compiled binary over real manifests, which is what a user actually does.
+      # Runs the compiled binary over real manifests and checks each tree exits
+      # the way it should. Linux only: the task is a shell script, and the
+      # end-to-end test in the matrix above already drives the same command
+      # over the same manifests on every platform.
       - run: mise run lint-examples
 
   lint:
@@ -48,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
@@ -73,17 +99,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-
-      - name: Cache Go modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-tidy-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-go-tidy-
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
       - run: go mod tidy
       - name: Fail if go.mod or go.sum changed
         run: git diff --exit-code go.mod go.sum
-

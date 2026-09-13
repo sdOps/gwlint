@@ -196,10 +196,12 @@ mise exec -- golangci-lint fmt --diff ./...
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in three parallel jobs:
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request:
 
-- **Build and test** builds the binary, runs `go vet`, runs the tests under the race detector, and then runs the compiled binary against `examples/failing` and `examples/passing`, checking each exits the way it should.
-  The unit tests exercise the check through a lint context; this last step is the only thing that proves the shipped binary works on real manifests.
+- **Test** builds, vets, and runs the tests under the race detector, as a matrix across `ubuntu-latest`, `macos-latest` and `windows-latest`.
+  Path handling is the thing worth testing across platforms, and the tests are full of it: the end-to-end tests write manifests into temporary directories and lint them through the real command, so they exercise the same file walking a user's invocation does.
+  The matrix does not fail fast, so one platform breaking still reports the others.
+- **Examples** runs the compiled binary against `examples/failing` and `examples/passing` and checks each exits the way it should. Linux only, because the task is a shell script; the end-to-end test in the matrix already drives the same command over the same manifests everywhere.
 - **Lint** runs `golangci-lint run` and `golangci-lint fmt --diff`, then checks that `mise.toml` and `go.mod` still name the same Go version.
 - **go.mod is tidy** runs `go mod tidy` and fails if `go.mod` or `go.sum` changed.
 `.github/workflows/vulncheck.yml` runs `govulncheck` separately, on pushes and pull requests but also nightly and on demand.
@@ -211,8 +213,8 @@ Unlike helm's govulncheck workflow, this one is not filtered to `go.sum` changes
 
 Every action is pinned to a commit SHA rather than a tag, with the version in a trailing comment, so a moved tag cannot change what CI runs.
 
-CI installs its toolchain with mise from the same `mise.toml` a developer uses, so a green local `mise run check` means the same tool versions ran locally as in CI.
-CI runs on Linux only; nothing currently exercises the macOS or Windows paths.
+The Linux-only jobs install their toolchain with mise from the same `mise.toml` a developer uses, so a green local `mise run check` means the same tool versions ran locally as in CI.
+The test matrix uses `actions/setup-go` instead, reading the version from `go.mod`: mise does not document Windows support, and `mise run check-go-version` keeps `go.mod` and `mise.toml` on the same number, so the pin stays single-sourced either way.
 
 The Go version lives in `go.mod`, and `mise.toml` pins the toolchain to the same number; `mise run check-go-version` fails if they drift apart.
 `.golangci.yml` deliberately sets no `go:` version of its own, since golangci-lint reads it from `go.mod`.
