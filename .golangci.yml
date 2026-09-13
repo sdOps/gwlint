@@ -130,8 +130,9 @@ output:
   show-stats: false
 
 run:
-  go: "1.22"
-
+  # No `go:` pin here on purpose: golangci-lint reads the language version from
+  # go.mod, which mise.toml's toolchain pin is kept in sync with. Setting it
+  # here too would just be a third place for the version to drift.
   timeout: 5m
 
 version: "2"

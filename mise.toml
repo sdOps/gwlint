@@ -10,6 +10,10 @@ run = "go build -o gwlint ./cmd/gwlint"
 description = "Run unit tests"
 run = "go test ./..."
 
+[tasks.test-race]
+description = "Run unit tests under the race detector"
+run = "go test -race ./..."
+
 [tasks.vet]
 description = "Run go vet"
 run = "go vet ./..."
@@ -18,14 +22,43 @@ run = "go vet ./..."
 description = "Run golangci-lint"
 run = "golangci-lint run ./..."
 
+[tasks.fmt]
+description = "Apply gofmt and goimports formatting"
+run = "golangci-lint fmt ./..."
+
+[tasks.fmt-check]
+description = "Fail if any file is not formatted. golangci-lint run does not check formatting in v2; only fmt does"
+run = "golangci-lint fmt --diff ./..."
+
+[tasks.check-go-version]
+description = "Fail if mise.toml's Go pin and go.mod's go directive disagree"
+run = """
+set -eu
+mise_go=$(grep -E '^go = ' mise.toml | cut -d'"' -f2)
+mod_go=$(grep -E '^go [0-9]' go.mod | awk '{print $2}')
+if [ "$mise_go" != "$mod_go" ]; then
+  echo "Go version pins disagree: mise.toml has $mise_go, go.mod has $mod_go" >&2
+  exit 1
+fi
+echo "Go version pin agrees: $mise_go"
+"""
+
+[tasks.vulncheck]
+description = "Run govulncheck, failing on anything outside .govulncheck-allowlist"
+run = "./scripts/vulncheck.sh"
+
 [tasks.check]
-description = "Run build, vet, test, and lint"
-depends = ["build", "vet", "test", "lint"]
+description = "Run build, vet, formatting, test, and lint"
+depends = ["build", "vet", "check-go-version", "fmt-check", "test", "lint"]
 
 [tasks.lint-examples]
 description = "Run the built gwlint binary against the sample manifests"
 depends = ["build"]
 run = """
-./gwlint lint ./examples/failing || true
+set -eu
+if ./gwlint lint ./examples/failing; then
+  echo "expected gwlint to flag ./examples/failing, but it exited 0" >&2
+  exit 1
+fi
 ./gwlint lint ./examples/passing
 """
