@@ -202,25 +202,14 @@ mise exec -- golangci-lint fmt --diff ./...
   The unit tests exercise the check through a lint context; this last step is the only thing that proves the shipped binary works on real manifests.
 - **Lint** runs `golangci-lint run` and `golangci-lint fmt --diff`, then checks that `mise.toml` and `go.mod` still name the same Go version.
 - **go.mod is tidy** runs `go mod tidy` and fails if `go.mod` or `go.sum` changed.
-- **Vulnerabilities** runs `govulncheck` through `scripts/vulncheck.sh`.
+- **Vulnerabilities** runs `govulncheck` through `scripts/vulncheck.sh`, which fails on anything reachable from gwlint's own code that is not recorded in `.govulncheck-allowlist`, and equally fails on an entry there that is no longer reported.
+  That file lists what is currently suppressed and why; it is the one place that has to stay accurate, so it is not repeated here.
 
 CI installs its toolchain with mise from the same `mise.toml` a developer uses, so a green local `mise run check` means the same tool versions ran locally as in CI.
 CI runs on Linux only; nothing currently exercises the macOS or Windows paths.
 
 The Go version lives in `go.mod`, and `mise.toml` pins the toolchain to the same number; `mise run check-go-version` fails if they drift apart.
 `.golangci.yml` deliberately sets no `go:` version of its own, since golangci-lint reads it from `go.mod`.
-
-### Known vulnerabilities
-
-`scripts/vulncheck.sh` fails on any vulnerability govulncheck can reach from gwlint's code unless it is listed in `.govulncheck-allowlist`, and equally fails on an allowlist entry that is no longer reported, so the file cannot quietly go stale.
-
-Four entries are allowlisted today: one in `golang.org/x/crypto/openpgp`, which is deprecated outright rather than patched, and three in `github.com/containerd/containerd` (CVE-2026-53492, CVE-2026-50195, CVE-2026-53489).
-The containerd three are fixed in 2.1.9 / 2.2.5 / 2.3.2 with no backport to the 1.7 line, and those fixes sit on the `github.com/containerd/containerd/v2` module path, which minimum version selection cannot reach from the v1 path gwlint is on.
-helm v3.20.0 requires `containerd` v1.7.x, and `go.mod` pins helm to v3.20.0 to match kube-linter (see below), so helm is the actual blocker; the three come off the allowlist once helm moves to containerd v2.
-
-All four reach gwlint only through the package `init()` of code linked in transitively by kube-linter's `lintcontext`, via helm's OCI registry support and containerd beneath it.
-gwlint verifies no signatures and talks to no container runtime, so nothing gwlint's own code does drives those paths.
-Each entry carries its reasoning in the allowlist file; re-check them whenever kube-linter or helm is upgraded.
 
 ### A note on dependency versions
 
