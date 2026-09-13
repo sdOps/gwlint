@@ -194,6 +194,11 @@ mise exec -- golangci-lint run ./...
 mise exec -- golangci-lint fmt --diff ./...
 ```
 
+## Contributing
+
+`AGENTS.md` holds the working guide for this repo: the build and test commands, the package layout, what the architecture deliberately works around, the Gateway API details that have caused real bugs, and the rules a change has to meet.
+It is written for coding agents, but it is the same information a new human contributor needs, so start there.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push to `main` and on every pull request:
