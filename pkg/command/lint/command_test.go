@@ -203,7 +203,7 @@ func TestPlainOutputReportsWhatWasScanned(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, string(contents), "No lint errors found.")
-	assert.Regexp(t, `Checked \d+ objects from \d+ files, \d+ in scope for the enabled checks\.`, string(contents))
+	assert.Regexp(t, `Checked \d+ BackendTrafficPolicy objects \(\d+ objects loaded from \d+ files\)\.`, string(contents))
 }
 
 // The case the summary exists for: objects loaded, but none a check applies to.
@@ -224,7 +224,7 @@ func TestPlainOutputCallsOutWhenNothingIsInScope(t *testing.T) {
 	contents, err := os.ReadFile(outPath) //nolint:gosec // test-controlled path
 	require.NoError(t, err)
 
-	assert.Contains(t, string(contents), "none of which any enabled check applies to")
+	assert.Contains(t, string(contents), "No BackendTrafficPolicy objects found, so nothing was checked")
 }
 
 // The counts have to be in the machine-readable output too, and adding them
@@ -233,11 +233,13 @@ func TestJSONOutputCarriesTheScanSummary(t *testing.T) {
 	result, err := runLint(t, examplePath(t, "failing"))
 	require.Error(t, err)
 
-	assert.Equal(t, 4, result.Scanned.InScope, "one BackendTrafficPolicy per failing scenario")
+	assert.Equal(t, 4, result.Scanned.Checked, "one BackendTrafficPolicy per failing scenario")
+	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4}, result.Scanned.CheckedByKind)
+	assert.Equal(t, []string{"BackendTrafficPolicy"}, result.Scanned.LooksFor)
 	assert.Positive(t, result.Scanned.Objects)
 	assert.Positive(t, result.Scanned.Files)
 	assert.Zero(t, result.Scanned.Unparsed)
-	assert.GreaterOrEqual(t, result.Scanned.Objects, result.Scanned.InScope)
+	assert.GreaterOrEqual(t, result.Scanned.Objects, result.Scanned.Checked)
 	// Still the kube-linter-shaped fields.
 	assert.NotEmpty(t, result.Reports)
 	assert.NotEmpty(t, result.Checks)
