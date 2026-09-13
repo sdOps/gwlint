@@ -2,6 +2,7 @@ package fqdnbackendcoldstart
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
@@ -298,6 +299,60 @@ func selectorCoverage(kind, name string) string {
 
 func listenerSetCoverage(listenerSet, routeKind, route string) string {
 	return fmt.Sprintf("targets ListenerSet %q, whose attached %s %q routes to", listenerSet, routeKind, route)
+}
+
+func sectionPtr(n gatewayv1.SectionName) *gatewayv1.SectionName { return &n }
+
+func (s *FQDNBackendColdStartTestSuite) addHTTPRouteWithNamedRules(rulesByName map[string]string) {
+	// Sorted so the route is built identically on every run.
+	names := make([]string, 0, len(rulesByName))
+	for name := range rulesByName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	rules := make([]gatewayv1.HTTPRouteRule, 0, len(names))
+	for _, name := range names {
+		rules = append(rules, gatewayv1.HTTPRouteRule{
+			Name: sectionPtr(gatewayv1.SectionName(name)),
+			BackendRefs: []gatewayv1.HTTPBackendRef{{
+				BackendRef: gatewayv1.BackendRef{BackendObjectReference: envoyBackendRef(rulesByName[name], "")},
+			}},
+		})
+	}
+	route := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
+		Spec:       gatewayv1.HTTPRouteSpec{Rules: rules},
+	}
+	route.SetGroupVersionKind(routeGVK("HTTPRoute"))
+	s.ctx.AddObject(routeName, route)
+}
+
+func (s *FQDNBackendColdStartTestSuite) addPolicyTargetingSection(targetKind gatewayv1.Kind, targetName gatewayv1.ObjectName, section *gatewayv1.SectionName) {
+	policy := s.newPolicy(nil)
+	policy.Spec.TargetRefs = []gatewayv1.LocalPolicyTargetReferenceWithSectionName{{
+		LocalPolicyTargetReference: localTargetRef(targetKind, targetName),
+		SectionName:                section,
+	}}
+	s.ctx.AddObject(policyName, policy)
+}
+
+// addNamedPolicy adds a second policy under its own key, for cases where two
+// policies cover the same route at different levels of the hierarchy.
+func (s *FQDNBackendColdStartTestSuite) addNamedPolicy(name string, healthCheck *egv1a1.HealthCheck, targetKind gatewayv1.Kind, targetName gatewayv1.ObjectName) {
+	policy := &egv1a1.BackendTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: egv1a1.BackendTrafficPolicySpec{
+			PolicyTargetReferences: egv1a1.PolicyTargetReferences{
+				TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
+					{LocalPolicyTargetReference: localTargetRef(targetKind, targetName)},
+				},
+			},
+			ClusterSettings: egv1a1.ClusterSettings{HealthCheck: healthCheck},
+		},
+	}
+	policy.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackendTrafficPolicy))
+	s.ctx.AddObject(name, policy)
 }
 
 func (s *FQDNBackendColdStartTestSuite) TestFlagsFQDNBackendWithNoHealthCheck() {
@@ -716,6 +771,131 @@ func (s *FQDNBackendColdStartTestSuite) TestPassesWhenListenerSetBelongsToAnothe
 	}}, envoyBackendRef(backendName, ""))
 	s.addBackend(backendName, namespace, true)
 	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+
+	s.expectNoDiagnostics()
+}
+
+// A Backend can carry several endpoints. Reporting only the first FQDN
+// understated what has to resolve at startup.
+func (s *FQDNBackendColdStartTestSuite) TestNamesEveryFQDNEndpointOnTheBackend() {
+	s.addHTTPRoute("", envoyBackendRef(backendName, ""))
+	backend := &egv1a1.Backend{
+		ObjectMeta: metav1.ObjectMeta{Name: backendName, Namespace: namespace},
+		Spec: egv1a1.BackendSpec{Endpoints: []egv1a1.BackendEndpoint{
+			{FQDN: &egv1a1.FQDNEndpoint{Hostname: "one.example.com", Port: 443}},
+			{IP: &egv1a1.IPEndpoint{Address: "10.0.0.1", Port: 443}},
+			{FQDN: &egv1a1.FQDNEndpoint{Hostname: "two.example.com", Port: 443}},
+		}},
+	}
+	backend.SetGroupVersionKind(egv1a1.GroupVersion.WithKind(egv1a1.KindBackend))
+	s.ctx.AddObject(backendName, backend)
+	s.addPolicy(nil)
+
+	s.expectDiagnostics(fmt.Sprintf(
+		"BackendTrafficPolicy has no health check, but %s Backend %q with FQDN endpoints "+
+			"%q and %q; this backend resolves via DNS at startup and can 503 before the name resolves",
+		directCoverage("HTTPRoute", routeName), backendName, "one.example.com", "two.example.com"))
+}
+
+// Envoy Gateway: with no mergeType set, "only the most specific configuration
+// takes effect". A route-level policy that does configure a health check
+// closes the gap the Gateway-level one leaves, so reporting the Gateway-level
+// policy for that route would be a false positive.
+func (s *FQDNBackendColdStartTestSuite) TestGatewayPolicyIsOverriddenByRoutePolicyWithHealthCheck() {
+	s.addRouteWithParentGateway(true, "public-gateway")
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+	s.addNamedPolicy("route-policy", &egv1a1.HealthCheck{Passive: &egv1a1.PassiveHealthCheck{}}, "HTTPRoute", routeName)
+
+	s.expectNoDiagnostics()
+}
+
+// A route-level policy that is itself missing a health check overrides
+// nothing, so the Gateway-level finding stands, and the route-level policy is
+// flagged on its own account.
+func (s *FQDNBackendColdStartTestSuite) TestGatewayPolicyStandsWhenRoutePolicyAlsoLacksHealthCheck() {
+	s.addRouteWithParentGateway(true, "public-gateway")
+	s.addPolicyTargeting(nil, "Gateway", "public-gateway")
+	s.addNamedPolicy("route-policy", nil, "HTTPRoute", routeName)
+
+	s.Validate(s.ctx, []templates.TestCase{
+		{Diagnostics: map[string][]diagnostic.Diagnostic{
+			policyName: {{Message: wantMessage(
+				gatewayCoverage("public-gateway", "HTTPRoute", routeName), backendName)}},
+			"route-policy": {{Message: wantMessage(
+				directCoverage("HTTPRoute", routeName), backendName)}},
+		}},
+	})
+}
+
+// A sectionName on a Gateway targetRef names a listener, so the policy only
+// covers routes attached to that listener.
+func (s *FQDNBackendColdStartTestSuite) TestGatewaySectionNameNarrowsToOneListener() {
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{{
+		Name:        "public-gateway",
+		SectionName: sectionPtr("admin"),
+	}}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargetingSection("Gateway", "public-gateway", sectionPtr("web"))
+
+	s.expectNoDiagnostics()
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestGatewaySectionNameMatchesTheSameListener() {
+	s.addHTTPRouteWithParentRefs([]gatewayv1.ParentReference{{
+		Name:        "public-gateway",
+		SectionName: sectionPtr("web"),
+	}}, envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargetingSection("Gateway", "public-gateway", sectionPtr("web"))
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("public-gateway", "HTTPRoute", routeName), backendName))
+}
+
+// A parentRef naming no listener attaches the route to every listener, so a
+// listener-scoped policy still covers it.
+func (s *FQDNBackendColdStartTestSuite) TestGatewaySectionNameCoversRouteAttachedToAllListeners() {
+	s.addHTTPRoute("public-gateway", envoyBackendRef(backendName, ""))
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargetingSection("Gateway", "public-gateway", sectionPtr("web"))
+
+	s.expectDiagnostics(wantMessage(gatewayCoverage("public-gateway", "HTTPRoute", routeName), backendName))
+}
+
+// On a route targetRef the sectionName names a rule, not a listener, so only
+// that rule's backendRefs are covered.
+func (s *FQDNBackendColdStartTestSuite) TestRouteSectionNameNarrowsToOneRule() {
+	s.addHTTPRouteWithNamedRules(map[string]string{
+		"safe":  backendName,
+		"risky": "risky-upstream",
+	})
+	s.addBackend(backendName, namespace, true)
+	s.addBackend("risky-upstream", namespace, true)
+	s.addPolicyTargetingSection("HTTPRoute", routeName, sectionPtr("safe"))
+
+	s.expectDiagnostics(wantMessage(directCoverage("HTTPRoute", routeName), backendName))
+}
+
+func (s *FQDNBackendColdStartTestSuite) TestRouteWithoutSectionNameCoversEveryRule() {
+	s.addHTTPRouteWithNamedRules(map[string]string{
+		"safe":  backendName,
+		"risky": "risky-upstream",
+	})
+	s.addBackend(backendName, namespace, true)
+	s.addBackend("risky-upstream", namespace, true)
+	s.addPolicy(nil)
+
+	s.expectDiagnostics(
+		wantMessage(directCoverage("HTTPRoute", routeName), backendName),
+		wantMessage(directCoverage("HTTPRoute", routeName), "risky-upstream"),
+	)
+}
+
+// A sectionName naming a rule that does not exist covers nothing, rather than
+// falling back to the whole route.
+func (s *FQDNBackendColdStartTestSuite) TestRouteSectionNameMatchingNoRuleCoversNothing() {
+	s.addHTTPRouteWithNamedRules(map[string]string{"safe": backendName})
+	s.addBackend(backendName, namespace, true)
+	s.addPolicyTargetingSection("HTTPRoute", routeName, sectionPtr("absent"))
 
 	s.expectNoDiagnostics()
 }

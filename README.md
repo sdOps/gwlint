@@ -25,10 +25,15 @@ This first pass covers core Gateway API resources plus Envoy Gateway's CRDs spec
 
 ### `fqdn-backend-cold-start`
 
-Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy covers an `HTTPRoute` or `GRPCRoute` whose `backendRefs` point at an Envoy Gateway `Backend` object with an FQDN endpoint (`spec.endpoints[].fqdn`).
+Flags a `BackendTrafficPolicy` with no active or passive health check configured, when that policy covers a route whose `backendRefs` point at an Envoy Gateway `Backend` object with one or more FQDN endpoints (`spec.endpoints[].fqdn.hostname`).
+Every FQDN endpoint on the backend is named in the finding, since each one is a name that has to resolve before traffic can flow.
 A policy covers a route in any of the ways Envoy Gateway lets it: by naming the route in `targetRef`/`targetRefs`, by selecting it with `targetSelectors`, or by targeting the `Gateway` or `ListenerSet` the route attaches to via `parentRefs`.
 Gateway API's policy attachment hierarchy runs Gateway to ListenerSet to Route, so a Gateway-level policy applies to every route beneath it by default, including routes attached to a `ListenerSet` belonging to that Gateway; this check follows that same resolution, since a shared Gateway-level policy with no health check is at least as common in practice as a route-level one.
 All five route kinds are resolved, not just `HTTPRoute` and `GRPCRoute`: `TCPRoute`, `TLSRoute` and `UDPRoute` carry `backendRefs` too, so they reach FQDN `Backend`s the same way.
+
+A `sectionName` on the `targetRef` narrows coverage, and means different things by target kind, both of which are honoured: on a `Gateway` or `ListenerSet` it names a listener, so only routes attached to that listener are covered (a route whose `parentRefs` name no listener attaches to all of them, so it stays covered); on a route it names a rule, so only that rule's `backendRefs` are.
+
+Policy precedence is applied too. Envoy Gateway's `mergeType` documentation is explicit that with no merge configured, "only the most specific configuration takes effect", so a `Gateway`-level policy with no health check is not reported for a route that has its own `BackendTrafficPolicy` configuring one: the more specific policy displaces it and the gap is already closed. A route-level policy that is itself missing a health check overrides nothing, so the Gateway-level finding still stands.
 
 **Why this check exists.** An FQDN-based backend endpoint puts Envoy Gateway on the same DNS-resolving cluster path the legacy Envoy `STRICT_DNS` cluster type used: the upstream address resolves at startup, not from a static IP.
 This check is based on a real incident: a cold-start DNS resolution gap on an FQDN-backed route caused 503s before the name had resolved, with no health check in place to route around the gap.
@@ -39,6 +44,7 @@ The fix in that incident, and the remediation this check recommends, is an activ
 - A `targetSelectors` entry scoped to namespaces by label (`namespaces.from: Selector`) is not resolved, since deciding it needs the `Namespace` objects, which a rendered manifest set does not usually contain. `from: Same` (the default) and `from: All` are both honoured.
 - A `backendRef` that omits a namespace resolves in the namespace of the route that references it, which for a Gateway-level policy is not necessarily the policy's own namespace.
   Cross-namespace `backendRef`s are still matched by namespace/name only; `ReferenceGrant` validity is not checked (that's a separate Phase 2 check), so a reference that a real cluster would reject for want of a grant is still reported here.
+- Policy precedence is resolved structurally, by asking whether a more specific policy configures a health check at all. Envoy Gateway's `mergeType` (which merges a route-level policy into its parent rather than replacing it) is not interpreted, so a policy using it may be judged as a plain override.
 - A health check being present does not mean the risk is actually closed: for a `Backend` with only one FQDN endpoint and no redundancy, ejecting or failing that endpoint has nowhere else to route to.
   The check only verifies that a health check exists, not that it provides real failover; a health check on a single-endpoint backend mainly changes the failure mode from slow to fast, it doesn't add availability.
 
