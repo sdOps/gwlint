@@ -80,7 +80,28 @@ jobs:
 
       - name: Generate release notes
         run: |
+          set -eu
           mise exec -- git-cliff --tag "${{ steps.version.outputs.version }}" --unreleased -o release-notes.md
+
+          # Read straight from go.mod rather than hand-typing a version:
+          # this is what the tagged commit actually pins, so it can't drift
+          # from reality the way a maintained-by-hand note eventually would.
+          # Envoy Gateway's gateway.envoyproxy.io/v1alpha1 API in particular
+          # has had real breaking changes between minor releases (see
+          # AGENTS.md's Gateway API domain notes), so knowing exactly which
+          # version a given gwlint release was built against matters.
+          gwapi_version=$(awk '/sigs\.k8s\.io\/gateway-api /{print $2}' go.mod)
+          eg_version=$(awk '/github\.com\/envoyproxy\/gateway /{print $2}' go.mod)
+          {
+            echo ""
+            echo "## Compatibility"
+            echo ""
+            echo "| Dependency | Version |"
+            echo "|---|---|"
+            echo "| Gateway API | $gwapi_version |"
+            echo "| Envoy Gateway | $eg_version |"
+          } >> release-notes.md
+
           cat release-notes.md
 
       - name: Tag and push
