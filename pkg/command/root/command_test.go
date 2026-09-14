@@ -19,6 +19,12 @@ import (
 // runRoot runs the root command and captures os.Stdout. kube-linter's own
 // subcommands print there directly rather than through cobra's writer, so
 // cmd.SetOut is not enough to see their output.
+//
+// The pipe has to be drained concurrently with Execute, not after it
+// returns: an OS pipe's buffer is finite (small on Windows in particular),
+// and with 27 checks registered, "templates list" writes enough output to
+// fill it and block the write end until something reads, which never
+// happens if the read starts only once Execute has already returned.
 func runRoot(t *testing.T, args ...string) string {
 	t.Helper()
 	read, write, err := os.Pipe()
@@ -28,14 +34,18 @@ func runRoot(t *testing.T, args ...string) string {
 	os.Stdout = write
 	defer func() { os.Stdout = stdout }()
 
+	var out bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, readErr := out.ReadFrom(read)
+		done <- readErr
+	}()
+
 	cmd := root.Command()
 	cmd.SetArgs(args)
 	execErr := cmd.Execute()
 	require.NoError(t, write.Close())
-
-	var out bytes.Buffer
-	_, err = out.ReadFrom(read)
-	require.NoError(t, err)
+	require.NoError(t, <-done)
 	require.NoError(t, execErr)
 	return out.String()
 }
