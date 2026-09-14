@@ -1,0 +1,34 @@
+# A ListenerSet carries no listeners of its own on the wire: its entries merge
+# into the parent Gateway's list. Name a Gateway that is not there and the
+# apply still succeeds, but nothing is ever bound.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: dlsp-real-gateway
+  namespace: dlsp
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: dlsp-extra-listeners
+  namespace: dlsp
+spec:
+  parentRef:
+    name: dlsp-typo-gateway
+  listeners:
+    - name: admin
+      port: 8443
+      protocol: HTTPS
+
+      tls:
+        certificateRefs:
+          - name: placeholder-cert

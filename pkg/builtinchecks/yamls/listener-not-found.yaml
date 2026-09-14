@@ -1,0 +1,11 @@
+name: "listener-not-found"
+description: "Flag routes whose parentRefs sectionName names a listener the Gateway does not declare, so the route is never accepted onto it"
+remediation: "Correct the sectionName to name a listener the parent actually declares, or remove it to attach the route to every listener. Gateway API treats sectionName as a hard requirement: a name that does not resolve means the route is not accepted onto that parent, and the reason appears only in the route's status conditions."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "listener-not-found"

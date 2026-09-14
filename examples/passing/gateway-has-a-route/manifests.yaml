@@ -1,0 +1,28 @@
+# The same shape, with a route attached to the Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ghar-gateway
+  namespace: ghar
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ghar-route
+  namespace: ghar
+spec:
+  parentRefs:
+    - name: ghar-gateway
+  rules:
+    - backendRefs:
+        - name: ghar-service
+          port: 8080

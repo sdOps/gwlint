@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: crm-edge-gateway
+  namespace: crm-edge
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: plain
+      port: 80
+      protocol: HTTP
+      hostname: crm-edge.example.com
+    - name: internal
+      port: 8080
+      protocol: HTTP
+      hostname: crm-edge.example.com

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dpt-orders
+  namespace: dpt-shop
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080

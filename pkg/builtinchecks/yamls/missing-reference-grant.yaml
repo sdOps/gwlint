@@ -1,0 +1,11 @@
+name: "missing-reference-grant"
+description: "Flag routes whose backendRefs cross a namespace boundary with no ReferenceGrant in the target namespace permitting the reference, so the backend never resolves"
+remediation: "Add a ReferenceGrant in the backend's namespace whose from entry names the route's group, kind and namespace and whose to entry names the backend's group and kind, or move the backend into the route's namespace. Gateway API denies cross-namespace references by default, so the apply succeeds and the rule serves errors instead."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "missing-reference-grant"

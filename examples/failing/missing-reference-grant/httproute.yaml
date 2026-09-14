@@ -1,0 +1,17 @@
+# The backendRef crosses into refgrant-payments, which grants access only to
+# routes in refgrant-warehouse. Gateway API denies a cross-namespace reference
+# unless a ReferenceGrant in the target namespace allows it, so this rule
+# resolves to no backend once it is applied.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: refgrant-storefront-route
+  namespace: refgrant-storefront
+spec:
+  parentRefs:
+    - name: refgrant-storefront-gateway
+  rules:
+    - backendRefs:
+        - name: refgrant-orders-api
+          namespace: refgrant-payments
+          port: 8080

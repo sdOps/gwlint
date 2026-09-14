@@ -1,0 +1,32 @@
+# The same shape, with parentRef naming the Gateway that is there.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: lspr-real-gateway
+  namespace: lspr
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: lspr-extra-listeners
+  namespace: lspr
+spec:
+  parentRef:
+    name: lspr-real-gateway
+  listeners:
+    - name: admin
+      port: 8443
+      protocol: HTTPS
+
+      tls:
+        certificateRefs:
+          - name: placeholder-cert

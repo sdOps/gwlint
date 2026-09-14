@@ -1,0 +1,11 @@
+name: "duplicate-rule-name"
+description: "Flag routes with two rules sharing a name, which a policy targetRef sectionName cannot then address unambiguously"
+remediation: "Give every named rule on the route its own name, or drop the name from the rules nothing targets. A rule name is the handle a policy targetRef sectionName uses to attach to one rule, and it is how the route reports per-rule status, so a repeated name leaves both undecided. Gateway API marks the uniqueness rule as experimental, so the standard-channel CRD does not reject the duplicate and the apply succeeds."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "duplicate-rule-name"

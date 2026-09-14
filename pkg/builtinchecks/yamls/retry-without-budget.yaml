@@ -1,0 +1,7 @@
+name: "retry-without-budget"
+description: "Flag BackendTrafficPolicies that set spec.retry.numRetries with no per-retry timeout and no backoff interval, so retries can amplify load on a backend that is already failing"
+remediation: "Set spec.retry.perRetry.timeout so each attempt is deadlined, and spec.retry.perRetry.backOff.baseInterval so retries are spaced out, or lower spec.retry.numRetries. See https://gateway.envoyproxy.io/docs/api/extension_types/#retry for the retry fields."
+scope:
+  objectKinds:
+    - BackendTrafficPolicy
+template: "retry-without-budget"

@@ -1,0 +1,39 @@
+# The policy configures a passive health check, but the Backend it covers has
+# only one endpoint. Ejecting that endpoint empties the load balancing set
+# entirely, so the health check changes the failure mode from slow to fast
+# without adding any actual availability.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: hcwf-policy
+  namespace: hcwf
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: hcwf-route
+  healthCheck:
+    passive: {}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hcwf-route
+  namespace: hcwf
+spec:
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: hcwf-upstream
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: hcwf-upstream
+  namespace: hcwf
+spec:
+  endpoints:
+    - fqdn:
+        hostname: hcwf.example.com
+        port: 443

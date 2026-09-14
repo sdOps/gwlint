@@ -1,0 +1,16 @@
+# The targetRef misspells the route it means to configure. Policy attachment is
+# by name and nothing rejects a name that resolves to nothing, so this applies
+# cleanly and the timeout below is never programmed onto anything.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: dpt-orders-timeout
+  namespace: dpt-shop
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dpt-orders-rout
+  timeout:
+    http:
+      connectionIdleTimeout: 15s

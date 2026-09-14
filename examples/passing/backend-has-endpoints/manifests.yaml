@@ -1,0 +1,11 @@
+# The same shape, with an endpoint actually declared.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: bhe-upstream
+  namespace: bhe
+spec:
+  endpoints:
+    - ip:
+        address: 10.0.0.5
+        port: 8080

@@ -1,0 +1,7 @@
+name: "dangling-policy-target"
+description: "Flag BackendTrafficPolicies whose targetRefs name a Gateway, ListenerSet or route that is not present, so the policy attaches to nothing and its settings never apply"
+remediation: "Correct the targetRef to name an existing Gateway, ListenerSet or route in the policy's own namespace, or include the manifests that define it in the same gwlint invocation. A BackendTrafficPolicy targetRef carries no namespace, so it only ever resolves in the policy's namespace. Nothing rejects a target that resolves to nothing: the policy is accepted and its timeouts, retries and circuit breakers silently do not apply."
+scope:
+  objectKinds:
+    - BackendTrafficPolicy
+template: "dangling-policy-target"

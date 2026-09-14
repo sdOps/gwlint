@@ -1,0 +1,14 @@
+# Attached to reporting-gateway purely so it is not an idle Gateway; this route has nothing
+# to do with what this scenario demonstrates.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: reporting-unrelated-route
+  namespace: reporting
+spec:
+  parentRefs:
+    - name: reporting-gateway
+  rules:
+    - backendRefs:
+        - name: reporting-unrelated-service
+          port: 8080

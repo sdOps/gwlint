@@ -1,0 +1,11 @@
+name: "route-not-permitted"
+description: "Flag routes a listener will not admit because its allowedRoutes excludes the route's namespace or kind, so the route never attaches"
+remediation: "Widen the listener's allowedRoutes to admit the route's namespace or kind, or move the route to a namespace the listener admits. Gateway API does not reject either object for this; the attachment simply never happens and the reason appears only in the route's status conditions."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "route-not-permitted"

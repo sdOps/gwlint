@@ -1,3 +1,8 @@
+# allowedRoutes explicitly admits routes from any namespace: this Gateway is
+# meant to be shared by other teams' route namespaces, which is the whole
+# premise of the scenario below. Without this, the cross-namespace attachment
+# would also trip route-not-permitted, which is a separate finding from the
+# one this scenario demonstrates.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -9,3 +14,9 @@ spec:
     - name: https
       port: 443
       protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        certificateRefs:
+          - name: placeholder-cert

@@ -1,0 +1,16 @@
+# numRetries is raised with no perRetry timeout or backoff. Envoy applies no
+# per-attempt deadline of its own, so every request becomes up to 5 attempts
+# at the full route timeout; under load this multiplies traffic into an
+# already-failing backend rather than shedding it.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: rwb-policy
+  namespace: rwb
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: rwb-route
+  retry:
+    numRetries: 5

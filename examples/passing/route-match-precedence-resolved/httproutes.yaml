@@ -1,0 +1,40 @@
+# Both routes sit on the same listener and hostname and their paths overlap,
+# but Gateway API decides this: the longer path prefix wins, so /api/v2 takes
+# precedence over /api and the split is exactly what the author wrote.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: crm-api-general
+  namespace: crm-api
+spec:
+  parentRefs:
+    - name: crm-api-gateway
+  hostnames:
+    - crm-api.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: crm-api-legacy
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: crm-api-v2
+  namespace: crm-api
+spec:
+  parentRefs:
+    - name: crm-api-gateway
+  hostnames:
+    - crm-api.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v2
+      backendRefs:
+        - name: crm-api-next
+          port: 8080

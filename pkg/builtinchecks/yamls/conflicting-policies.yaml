@@ -1,0 +1,7 @@
+name: "conflicting-policies"
+description: "Flag two BackendTrafficPolicies targeting the same object and section, where Envoy Gateway attaches only one and silently rejects the rest as Conflicted"
+remediation: "Merge the two BackendTrafficPolicies into one, or narrow them with distinct targetRef sectionNames so each claims a different listener or route rule. See https://gateway.envoyproxy.io/docs/tasks/traffic/backend-traffic-policy/ for policy attachment."
+scope:
+  objectKinds:
+    - BackendTrafficPolicy
+template: "conflicting-policies"

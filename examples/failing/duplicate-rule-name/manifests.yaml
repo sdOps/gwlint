@@ -1,0 +1,51 @@
+# Two rules on the route share the name "primary". Gateway API marks rule-name
+# uniqueness as an experimental validation, so the standard-channel CRD accepts
+# this and the apply succeeds. A policy targetRef with sectionName: primary
+# then has two candidate rules and nothing to choose between them.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: duprule-gateway
+  namespace: duprule
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: duprule-checkout
+  namespace: duprule
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: duprule-route
+  namespace: duprule
+spec:
+  parentRefs:
+    - name: duprule-gateway
+  rules:
+    - name: primary
+      matches:
+        - path:
+            type: PathPrefix
+            value: /checkout
+      backendRefs:
+        - name: duprule-checkout
+          port: 8080
+    - name: primary
+      matches:
+        - path:
+            type: PathPrefix
+            value: /checkout/express
+      backendRefs:
+        - name: duprule-checkout
+          port: 8080

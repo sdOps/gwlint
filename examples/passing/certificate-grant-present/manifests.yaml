@@ -1,0 +1,66 @@
+# The same cross-namespace certificate, with the ReferenceGrant the namespace
+# that owns the certificate has to publish for it.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: certgrant-ok-gateway
+  namespace: certgrant-ok-edge
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: certgrant-ok-wildcard-tls
+            namespace: certgrant-ok-certs
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: certgrant-ok-wildcard-tls
+  namespace: certgrant-ok-certs
+type: kubernetes.io/tls
+data:
+  tls.crt: ""
+  tls.key: ""
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: certgrant-ok-grant
+  namespace: certgrant-ok-certs
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: certgrant-ok-edge
+  to:
+    - group: ""
+      kind: Secret
+      name: certgrant-ok-wildcard-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: certgrant-ok-route
+  namespace: certgrant-ok-edge
+spec:
+  parentRefs:
+    - name: certgrant-ok-gateway
+  rules:
+    - backendRefs:
+        - name: certgrant-ok-api
+          port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: certgrant-ok-api
+  namespace: certgrant-ok-edge
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080

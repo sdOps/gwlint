@@ -1,0 +1,8 @@
+name: "conflicting-listeners"
+description: "Flag listeners sharing a port that Gateway API cannot tell apart, either because their protocols cannot share a port or because port, protocol and hostname are identical"
+remediation: "Move one of the listeners to its own port, or give it a hostname that distinguishes it. Gateway API calls listeners it cannot tell apart indistinct and forbids an implementation from picking a winner, so every listener in the conflicting group is refused and the port serves nothing; the reason appears only in the Conflicted listener status condition."
+scope:
+  objectKinds:
+    - Gateway
+    - ListenerSet
+template: "conflicting-listeners"

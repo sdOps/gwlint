@@ -1,0 +1,15 @@
+# The same shape, with a certificate declared to terminate TLS with.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: tlhc-gateway
+  namespace: tlhc
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: tlhc-cert

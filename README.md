@@ -12,17 +12,16 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 
 ## Status
 
-This is Phase 1: one check, `fqdn-backend-cold-start`, implemented end to end and documented below.
-It's a vertical slice meant to prove the architecture before building out the rest of the rule set, not the full intended scope.
-Checks are scoped to `BackendTrafficPolicy` and to all five route kinds; `Gateway`, `ListenerSet` and `Backend` are read while resolving them, and nothing reads `ReferenceGrant` yet.
-`ROADMAP.md` tracks what a Gateway API linter should cover and where gwlint is against it: three of roughly twenty-five, with core Gateway API ahead of implementation-specific work.
+gwlint runs 27 checks across every Gateway API route kind, `Gateway`, `ListenerSet`, `GatewayClass`, `ReferenceGrant`, and Envoy Gateway's `BackendTrafficPolicy` and `Backend`.
+`ROADMAP.md` tracks what a Gateway API linter should cover and where gwlint is against it: 27 of 28 identified checks, ordered by how badly the failure they catch hides.
+One check, `dangling-extension-ref`, remains: it needs its own design pass, since a filter's `extensionRef` can name an object of any kind, including ones gwlint has no typed knowledge of.
 `INSTRUCTION.md` holds the original phase plan, including a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific set is further along.
 
 ## Scope
 
 Checks fall into two groups.
-Vendor-neutral checks use only core Gateway API types and work against any implementation; `dangling-parent-ref` is one.
-Vendor-specific checks key off an implementation's own CRDs, and today that means Envoy Gateway's; `fqdn-backend-cold-start` is one.
+Vendor-neutral checks use only core Gateway API types and work against any implementation: Tiers 1 through 4 in `ROADMAP.md`, 23 checks in total.
+Vendor-specific checks key off an implementation's own CRDs, and today that means Envoy Gateway's: Tier 5, 4 checks.
 This first pass covers core Gateway API resources plus Envoy Gateway's CRDs specifically, not every implementation's vendor extensions.
 
 ## Checks
@@ -87,6 +86,61 @@ The fix in that incident, and the remediation this check recommends, is an activ
 
 **Remediation:** add a `healthCheck.active` or `healthCheck.passive` block to the `BackendTrafficPolicy`, or switch the `Backend` to an IP-based endpoint if the FQDN target isn't actually required.
 See the [Envoy Gateway health check docs](https://gateway.envoyproxy.io/docs/api/extension_types/#healthcheck).
+
+### The rest of the checks
+
+`dangling-parent-ref`, `dangling-backend-ref` and `fqdn-backend-cold-start` above get full write-ups because they were the first three and set the pattern the rest follow.
+The other 24 are documented the same depth in their own package: each package comment in `pkg/templates/<checkname>/template.go` explains why the misconfiguration matters, why a schema validator misses it, and what the check deliberately does not cover.
+The table below is the index; `gwlint templates list` prints the same key and description gwlint ships with, and every check has a matching pair of scenarios under `examples/`.
+
+**Tier 1: silent non-attachment**
+
+| Check | Scope | Flags |
+|---|---|---|
+| `listener-not-found` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes whose parentRefs sectionName names a listener the Gateway does not declare, so the route is never accepted onto it. |
+| `route-not-permitted` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes a listener will not admit because its allowedRoutes excludes the route's namespace or kind, so the route never attaches. |
+| `hostname-never-matches` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes whose hostnames cannot intersect the hostname of any listener they attach to, so no request can ever match the route. |
+| `protocol-mismatch` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes attached to a listener whose protocol cannot carry their kind, such as an HTTPRoute on a TCP listener, so the route is never programmed. |
+
+**Tier 2: reference integrity**
+
+| Check | Scope | Flags |
+|---|---|---|
+| `missing-reference-grant` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes whose backendRefs cross a namespace boundary with no ReferenceGrant in the target namespace permitting the reference, so the backend never resolves. |
+| `missing-certificate-grant` | `Gateway`, `ListenerSet` | Flag TLS listeners whose certificateRefs cross into another namespace with no ReferenceGrant permitting it, so the listener is never programmed. |
+| `dangling-certificate-ref` | `Gateway`, `ListenerSet` | Flag TLS listeners whose certificateRefs name a Secret that is not present, so the listener is never programmed and TLS handshakes on it fail. |
+| `dangling-gateway-class` | `Gateway` | Flag Gateways whose gatewayClassName names a GatewayClass that is not present, so no controller claims the Gateway and none of its listeners are ever programmed. |
+| `dangling-listener-set-parent` | `ListenerSet` | Flag ListenerSets whose parentRef names a Gateway that is not present, so their listeners are never merged into a Gateway and never bound. |
+| `dangling-policy-target` | `BackendTrafficPolicy` | Flag BackendTrafficPolicies whose targetRefs name a Gateway, ListenerSet or route that is not present, so the policy attaches to nothing and its settings never apply. |
+
+**Tier 3: route semantics**
+
+| Check | Scope | Flags |
+|---|---|---|
+| `conflicting-route-match` | `HTTPRoute` | Flag two HTTPRoutes that claim the same hostname with an identical request match on the same listener, where Gateway API's precedence rules leave the winner undefined. |
+| `all-weights-zero` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag route rules that set weight 0 on every backendRef, so the rule matches requests and then forwards them to nothing. |
+| `rule-serves-nothing` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag route rules with no backendRefs and no filter that produces a response, so requests matching the rule are answered with an error. |
+| `duplicate-rule-name` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes with two rules sharing a name, which a policy targetRef sectionName cannot then address unambiguously. |
+| `service-backend-without-port` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes whose backendRefs name a core Service with no port, which Gateway API requires, so the reference does not resolve. |
+
+**Tier 4: Gateway and listener validity**
+
+| Check | Scope | Flags |
+|---|---|---|
+| `duplicate-listener-name` | `Gateway`, `ListenerSet` | Flag Gateways and ListenerSets that declare two listeners under the same name, which a route sectionName or a listener-scoped policy cannot then address unambiguously. |
+| `conflicting-listeners` | `Gateway`, `ListenerSet` | Flag listeners sharing a port that Gateway API cannot tell apart, either because their protocols cannot share a port or because port, protocol and hostname are identical. |
+| `tls-listener-without-certificate` | `Gateway` | Flag Gateway listeners that terminate TLS with no tls.certificateRefs, so the listener has no certificate to present and every handshake fails. |
+| `hostname-on-non-hostname-protocol` | `Gateway` | Flag Gateway listeners that set a hostname on TCP or UDP, where Gateway API ignores it and the listener keeps admitting every connection on its port. |
+| `gateway-serves-no-routes` | `Gateway` | Flag Gateways that no route in the manifest set attaches to, so the Gateway is provisioned and serves no traffic. |
+
+**Tier 5: Envoy Gateway**
+
+| Check | Scope | Flags |
+|---|---|---|
+| `health-check-without-failover` | `BackendTrafficPolicy` | Flag BackendTrafficPolicies whose health check covers a route served by a single Backend endpoint, where ejecting it leaves nowhere to fail over to. |
+| `retry-without-budget` | `BackendTrafficPolicy` | Flag BackendTrafficPolicies that set spec.retry.numRetries with no per-retry timeout and no backoff interval, so retries can amplify load on a backend that is already failing. |
+| `backend-without-endpoints` | `Backend` | Flag Envoy Gateway Backends that declare no endpoints, so every backendRef resolving to them has nothing to route to. |
+| `conflicting-policies` | `BackendTrafficPolicy` | Flag two BackendTrafficPolicies targeting the same object and section, where Envoy Gateway attaches only one and silently rejects the rest as Conflicted. |
 
 ## Installation
 
@@ -202,7 +256,8 @@ That last line expands to one `gwlint lint` call listing every repo's rendered o
 One caveat this implies: object identity (namespace + name + kind) must be genuinely unique across everything passed to one `gwlint lint` invocation, the same way it would need to be in a real cluster.
 Linting two genuinely unrelated environments or clusters together in one invocation (rather than one real deployment's chart split across repos) isn't a supported use case, since a coincidental name collision between them would be treated as a real match.
 
-See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario:
+See `examples/failing` and `examples/passing`, each grouped into subdirectories by scenario, one pair per check.
+A sample:
 
 - `examples/failing/dangling-parent-ref`: a route whose `parentRefs` names a Gateway that is not there.
 - `examples/passing/parent-ref-resolves`: the same shape, with the Gateway present.
@@ -216,6 +271,8 @@ See `examples/failing` and `examples/passing`, each grouped into subdirectories 
 - `examples/passing/non-fqdn-backend`: no health check, but the backend is IP-based, not FQDN.
 - `examples/passing/gateway-not-attached`: policy targets a `Gateway`, but the FQDN-backed route is attached to a different `Gateway`, so the policy never covers it.
 - `examples/passing/service-backend`: no health check, but the route's `backendRef` is a plain core `Service` (the common case), not an Envoy Gateway `Backend`, so there's no FQDN endpoint to find.
+
+Every other check follows the same pattern; run `ls examples/failing examples/passing` for the full list, or see the table above for which check each scenario belongs to.
 
 Each scenario can be linted on its own, or together (`gwlint lint ./examples/failing`, `./examples/passing`, or `./examples` for all of them at once): every route, backend, and policy name is kept unique across the whole tree specifically so aggregate runs don't cross-contaminate now that contexts are merged (see above).
 

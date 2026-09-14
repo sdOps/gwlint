@@ -1,0 +1,7 @@
+name: "conflicting-route-match"
+description: "Flag two HTTPRoutes that claim the same hostname with an identical request match on the same listener, where Gateway API's precedence rules leave the winner undefined"
+remediation: "Make one of the two routes more specific, or merge them into a single route. Gateway API ranks overlapping routes by hostname length, then path length, then the number of header and query parameter matches, then creationTimestamp; two byte-identical matches on the same hostname and listener exhaust all of those, so the implementation picks a winner the manifests do not name and a later edit can silently swap it."
+scope:
+  objectKinds:
+    - HTTPRoute
+template: "conflicting-route-match"

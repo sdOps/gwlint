@@ -1,0 +1,8 @@
+name: "duplicate-listener-name"
+description: "Flag Gateways and ListenerSets that declare two listeners under the same name, which a route sectionName or a listener-scoped policy cannot then address unambiguously"
+remediation: "Rename one of the listeners so every name in the object is unique, and update any parentRef sectionName or policy targetRef sectionName that pointed at it. Gateway API requires listener names to be unique, but the rule is a CEL validation rather than part of the OpenAPI schema, so a schema validator accepts the manifest and the API server rejects it only at apply time."
+scope:
+  objectKinds:
+    - Gateway
+    - ListenerSet
+template: "duplicate-listener-name"

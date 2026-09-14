@@ -1,0 +1,16 @@
+# An HTTPS listener with no tls block at all. An unset mode defaults to
+# Terminate, which needs a certificate to present in the handshake; without
+# one every connection to the port fails while the Gateway itself still
+# applies cleanly, since the CRD's CEL rule only fires once a tls block
+# exists at all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: tlwc-gateway
+  namespace: tlwc
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS

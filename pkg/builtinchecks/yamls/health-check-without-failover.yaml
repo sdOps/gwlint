@@ -1,0 +1,7 @@
+name: "health-check-without-failover"
+description: "Flag BackendTrafficPolicies whose health check covers a route served by a single Backend endpoint, where ejecting it leaves nowhere to fail over to"
+remediation: "Add a second endpoint to the Backend so ejecting an unhealthy one has somewhere to fail over to, or accept that the health check only changes the failure mode from slow to fast. A health check on a single-endpoint Backend does not add availability: ejecting the only endpoint empties the load balancing set, so requests fail immediately instead of timing out against a sick upstream."
+scope:
+  objectKinds:
+    - BackendTrafficPolicy
+template: "health-check-without-failover"

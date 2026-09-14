@@ -1,11 +1,11 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: public-gateway
-  namespace: default
+  name: dpt-edge-gateway
+  namespace: dpt-shop
 spec:
   gatewayClassName: eg
   listeners:
-    - name: https
-      port: 443
-      protocol: HTTPS
+    - name: http
+      port: 80
+      protocol: HTTP

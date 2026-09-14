@@ -1,0 +1,16 @@
+# The rule has no backendRefs and no filter that answers a request on its own.
+# It still matches and claims the request from any broader rule, then has
+# nowhere to send it: Gateway API's own wording for this shape is a 500. The
+# usual way here is deleting a retired rule's backendRefs and leaving its
+# match behind.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rsn-route
+  namespace: rsn
+spec:
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /retired

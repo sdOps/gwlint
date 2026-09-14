@@ -6,15 +6,19 @@ Core Gateway API first, then implementation-specific checks; see `INSTRUCTION.md
 Ordered by how badly the failure hides. A misconfiguration that makes a manifest invalid gets caught by a schema validator.
 One that applies cleanly and silently serves nothing is what gwlint is for.
 
+27 of the 28 listed checks are implemented, tested, and documented in the README.
+`dangling-extension-ref` is the one gap: a filter `extensionRef` naming an object that is not present.
+It needs its own design pass, since `extensionRef` can name an object of any kind, including ones gwlint has no typed knowledge of, and the check has to say nothing about a kind it cannot resolve rather than guessing.
+
 ## Tier 1: silent non-attachment
 
 The route exists, the apply succeeds, the status conditions say why, and nobody reads status conditions.
 Every one of these ends with traffic going nowhere.
 
-- [ ] `listener-not-found` - a `parentRef` `sectionName` naming a listener the Gateway does not have.
-- [ ] `route-not-permitted` - the listener's `allowedRoutes.namespaces` or `allowedRoutes.kinds` excludes the route, so it never attaches.
-- [ ] `hostname-never-matches` - the route's hostnames do not intersect the listener's, so no request can ever match.
-- [ ] `protocol-mismatch` - an `HTTPRoute` attached to a `TCP` listener, or similar.
+- [x] `listener-not-found` - a `parentRef` `sectionName` naming a listener the Gateway does not have.
+- [x] `route-not-permitted` - the listener's `allowedRoutes.namespaces` or `allowedRoutes.kinds` excludes the route, so it never attaches.
+- [x] `hostname-never-matches` - the route's hostnames do not intersect the listener's, so no request can ever match.
+- [x] `protocol-mismatch` - an `HTTPRoute` attached to a `TCP` listener, or similar.
 - [x] `dangling-parent-ref` - the `parentRef` names a Gateway or ListenerSet that is not present.
 
 ## Tier 2: reference integrity
@@ -22,41 +26,41 @@ Every one of these ends with traffic going nowhere.
 A reference that resolves to nothing. Applies cleanly, fails at request time.
 
 - [x] `dangling-backend-ref` - a `backendRef` naming a Service or Backend that is not present.
-- [ ] `missing-reference-grant` - a cross-namespace `backendRef` with no `ReferenceGrant` permitting it.
-- [ ] `missing-certificate-grant` - a cross-namespace listener `certificateRef` with no `ReferenceGrant`.
-- [ ] `dangling-certificate-ref` - a listener `certificateRef` naming a Secret that is not present.
-- [ ] `dangling-gateway-class` - a Gateway naming a `GatewayClass` that is not present.
-- [ ] `dangling-listener-set-parent` - a `ListenerSet` whose `parentRef` names a Gateway that is not present.
+- [x] `missing-reference-grant` - a cross-namespace `backendRef` with no `ReferenceGrant` permitting it.
+- [x] `missing-certificate-grant` - a cross-namespace listener `certificateRef` with no `ReferenceGrant`.
+- [x] `dangling-certificate-ref` - a listener `certificateRef` naming a Secret that is not present.
+- [x] `dangling-gateway-class` - a Gateway naming a `GatewayClass` that is not present.
+- [x] `dangling-listener-set-parent` - a `ListenerSet` whose `parentRef` names a Gateway that is not present.
 - [ ] `dangling-extension-ref` - a filter `extensionRef` naming an object that is not present.
-- [ ] `dangling-policy-target` - a policy `targetRef` naming an object that is not present.
+- [x] `dangling-policy-target` - a policy `targetRef` naming an object that is not present.
 
 ## Tier 3: route semantics
 
 The route attaches and resolves, but does not do what it looks like it does.
 
-- [ ] `conflicting-route-match` - two routes claiming the same hostname and path on the same listener, with nothing resolving precedence.
-- [ ] `all-weights-zero` - every `backendRef` in a rule weighted `0`, so the rule serves nothing.
-- [ ] `rule-serves-nothing` - a rule with no `backendRefs` and no terminating filter.
-- [ ] `duplicate-rule-name` - two rules on a route sharing a name, which a policy `sectionName` cannot then address unambiguously.
-- [ ] `service-backend-without-port` - a `backendRef` to a Service with no port, which Gateway API requires.
+- [x] `conflicting-route-match` - two routes claiming the same hostname and path on the same listener, with nothing resolving precedence.
+- [x] `all-weights-zero` - every `backendRef` in a rule weighted `0`, so the rule serves nothing.
+- [x] `rule-serves-nothing` - a rule with no `backendRefs` and no terminating filter.
+- [x] `duplicate-rule-name` - two rules on a route sharing a name, which a policy `sectionName` cannot then address unambiguously.
+- [x] `service-backend-without-port` - a `backendRef` to a Service with no port, which Gateway API requires.
 
 ## Tier 4: Gateway and listener validity
 
-- [ ] `duplicate-listener-name` - listener names must be unique within a Gateway.
-- [ ] `conflicting-listeners` - two listeners on the same port with incompatible protocol or hostname.
-- [ ] `tls-listener-without-certificate` - a `Terminate`-mode TLS listener with no `certificateRefs`.
-- [ ] `hostname-on-non-hostname-protocol` - a listener hostname on `TCP` or `UDP`, where it means nothing.
-- [ ] `gateway-serves-no-routes` - a Gateway no route attaches to.
+- [x] `duplicate-listener-name` - listener names must be unique within a Gateway.
+- [x] `conflicting-listeners` - two listeners on the same port with incompatible protocol or hostname.
+- [x] `tls-listener-without-certificate` - a `Terminate`-mode TLS listener with no `certificateRefs`.
+- [x] `hostname-on-non-hostname-protocol` - a listener hostname on `TCP` or `UDP`, where it means nothing.
+- [x] `gateway-serves-no-routes` - a Gateway no route attaches to.
 
 ## Tier 5: Envoy Gateway
 
 Only after the core is covered.
 
 - [x] `fqdn-backend-cold-start` - a policy with no health check covering an FQDN-backed route.
-- [ ] `health-check-without-failover` - a health check on a single-endpoint Backend, which changes the failure mode from slow to fast without adding availability.
-- [ ] `retry-without-budget` - retries with no budget or cap, or on non-idempotent methods with no idempotency guard.
-- [ ] `backend-without-endpoints` - a `Backend` with an empty `endpoints` list.
-- [ ] `conflicting-policies` - two policies of the same kind targeting the same object, where only one takes effect.
+- [x] `health-check-without-failover` - a health check on a single-endpoint Backend, which changes the failure mode from slow to fast without adding availability.
+- [x] `retry-without-budget` - retries with no budget or cap, or on non-idempotent methods with no idempotency guard.
+- [x] `backend-without-endpoints` - a `Backend` with an empty `endpoints` list.
+- [x] `conflicting-policies` - two policies of the same kind targeting the same object, where only one takes effect.
 
 ## Not checks
 

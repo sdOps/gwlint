@@ -1,0 +1,41 @@
+# The backendRef names a Service but sets no port. Gateway API requires one,
+# and the requirement is a CEL rule rather than part of the structural schema,
+# so an offline schema validator passes this file. Without the port there is
+# nothing to forward to and the rule serves errors.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: svcport-gateway
+  namespace: svcport
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svcport-inventory
+  namespace: svcport
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svcport-route
+  namespace: svcport
+spec:
+  parentRefs:
+    - name: svcport-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /inventory
+      backendRefs:
+        - name: svcport-inventory

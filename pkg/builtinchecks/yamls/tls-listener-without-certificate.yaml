@@ -1,0 +1,7 @@
+name: "tls-listener-without-certificate"
+description: "Flag Gateway listeners that terminate TLS with no tls.certificateRefs, so the listener has no certificate to present and every handshake fails"
+remediation: "Give the listener a tls.certificateRefs entry naming the Secret that holds its certificate, or set tls.mode to Passthrough if the Gateway is meant to forward the TLS stream untouched. Terminate is what an unset mode means, and an HTTPS listener with no tls block at all is accepted by the apiserver, so nothing else reports this before traffic starts failing."
+scope:
+  objectKinds:
+    - Gateway
+template: "tls-listener-without-certificate"

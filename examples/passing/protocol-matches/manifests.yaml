@@ -1,0 +1,25 @@
+# The same shape, as a TCPRoute, which a TCP listener actually accepts.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: pmok-gateway
+  namespace: pmok
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: raw-tcp
+      port: 5432
+      protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TCPRoute
+metadata:
+  name: pmok-route
+  namespace: pmok
+spec:
+  parentRefs:
+    - name: pmok-gateway
+  rules:
+    - backendRefs:
+        - name: pmok-service
+          port: 5432

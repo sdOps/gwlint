@@ -1,0 +1,7 @@
+name: "hostname-on-non-hostname-protocol"
+description: "Flag Gateway listeners that set a hostname on TCP or UDP, where Gateway API ignores it and the listener keeps admitting every connection on its port"
+remediation: "Drop the hostname from the TCP or UDP listener, or move the traffic to a TLS listener, where the hostname is matched against SNI. TCP and UDP carry no hostname for a Gateway to match, so the field is ignored and the restriction it was written to express never applies."
+scope:
+  objectKinds:
+    - Gateway
+template: "hostname-on-non-hostname-protocol"

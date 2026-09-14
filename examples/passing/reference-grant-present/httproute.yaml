@@ -1,0 +1,14 @@
+# The same cross-namespace shape, with the owner of refgrant-billing opting in.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: refgrant-shop-route
+  namespace: refgrant-shop
+spec:
+  parentRefs:
+    - name: refgrant-shop-gateway
+  rules:
+    - backendRefs:
+        - name: refgrant-checkout-api
+          namespace: refgrant-billing
+          port: 8080

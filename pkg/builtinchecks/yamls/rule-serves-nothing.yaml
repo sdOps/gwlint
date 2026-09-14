@@ -1,0 +1,11 @@
+name: "rule-serves-nothing"
+description: "Flag route rules with no backendRefs and no filter that produces a response, so requests matching the rule are answered with an error"
+remediation: "Add a backendRef to the rule, add a filter that answers the request such as RequestRedirect, or delete the rule so its traffic falls through to one that serves it. Both fields are optional, so the rule applies cleanly and still claims every request its matches describe."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "rule-serves-nothing"

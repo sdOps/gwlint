@@ -1,0 +1,23 @@
+# Attached to checkout-gateway, and has nothing to do with the FQDN backend
+# below; it exists purely so checkout-gateway is not an idle Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: checkout-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: checkout-gateway
+  rules:
+    - backendRefs:
+        - name: checkout-service
+          port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-service
+  namespace: default
+spec:
+  ports:
+    - port: 8080

@@ -1,0 +1,14 @@
+# Attached to uniquename-gateway purely so it is not an idle Gateway; this route has nothing
+# to do with what this scenario demonstrates.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: uniquename-unrelated-route
+  namespace: uniquename
+spec:
+  parentRefs:
+    - name: uniquename-gateway
+  rules:
+    - backendRefs:
+        - name: uniquename-unrelated-service
+          port: 8080

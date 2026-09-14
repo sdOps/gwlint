@@ -1,0 +1,47 @@
+# No route in the set attaches to this Gateway. It is still provisioned, still
+# reports Programmed, and asks the cloud for an address; every request that
+# reaches it falls through to nothing. A second Gateway plus an unrelated
+# route are here so the manifest set is not merely routeless, which the check
+# treats as a platform repo linted on its own rather than an idle Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gsnr-idle-gateway
+  namespace: gsnr
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gsnr-busy-gateway
+  namespace: gsnr
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gsnr-route
+  namespace: gsnr
+spec:
+  parentRefs:
+    - name: gsnr-busy-gateway
+  rules:
+    - backendRefs:
+        - name: gsnr-service
+          port: 8080

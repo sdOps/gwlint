@@ -1,0 +1,11 @@
+name: "service-backend-without-port"
+description: "Flag routes whose backendRefs name a core Service with no port, which Gateway API requires, so the reference does not resolve"
+remediation: "Set the port on the backendRef to the Service port to forward to. Gateway API requires a port on a Service backendRef because a Service is a set of ports and the implementation has nothing to pick without it, so the reference stays unresolved and the rule serves errors. The requirement is a CEL rule rather than part of the structural schema, so an offline schema validator passes the manifest. An Envoy Gateway Backend carries its own endpoint ports and needs no port here."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "service-backend-without-port"

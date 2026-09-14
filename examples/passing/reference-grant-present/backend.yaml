@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: refgrant-checkout-api
+  namespace: refgrant-billing
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# Omitting to.name covers every Service in refgrant-billing, which is how most
+# charts write it.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: refgrant-billing-allow-shop
+  namespace: refgrant-billing
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: refgrant-shop
+  to:
+    - group: ""
+      kind: Service

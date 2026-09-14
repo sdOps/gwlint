@@ -11,6 +11,9 @@ spec:
     - name: https
       port: 443
       protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
 ---
 apiVersion: v1
 kind: Service

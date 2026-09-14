@@ -1,0 +1,7 @@
+name: "backend-without-endpoints"
+description: "Flag Envoy Gateway Backends that declare no endpoints, so every backendRef resolving to them has nothing to route to"
+remediation: "Add at least one entry to spec.endpoints, or set spec.type to DynamicResolver if the upstream address is meant to come from the request's Host header. spec.endpoints is optional in the Backend CRD, so an empty Backend applies cleanly and only fails at request time. See https://gateway.envoyproxy.io/docs/api/extension_types/#backend for the endpoint types."
+scope:
+  objectKinds:
+    - Backend
+template: "backend-without-endpoints"

@@ -1,0 +1,62 @@
+# The Service backendRef carries its port. The second rule points at an Envoy
+# Gateway Backend with no port, which is correct: a Backend declares the port
+# on each of its own endpoints, so the requirement applies to Service refs
+# only. This Backend uses an IP endpoint rather than an FQDN, so it stays out
+# of the DNS-resolving cluster path fqdn-backend-cold-start looks for.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: svcportok-gateway
+  namespace: svcportok
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svcportok-inventory
+  namespace: svcportok
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: svcportok-upstream
+  namespace: svcportok
+spec:
+  endpoints:
+    - ip:
+        address: 10.0.0.30
+        port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svcportok-route
+  namespace: svcportok
+spec:
+  parentRefs:
+    - name: svcportok-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /inventory
+      backendRefs:
+        - name: svcportok-inventory
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /inventory/archive
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: svcportok-upstream

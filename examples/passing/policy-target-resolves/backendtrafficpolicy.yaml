@@ -1,0 +1,14 @@
+# The same shape with the targetRef naming the route that is actually there.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: dptok-orders-timeout
+  namespace: dptok-shop
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dptok-orders-route
+  timeout:
+    http:
+      connectionIdleTimeout: 15s

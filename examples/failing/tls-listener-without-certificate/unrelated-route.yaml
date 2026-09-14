@@ -1,0 +1,14 @@
+# Attached to tlwc-gateway purely so it is not an idle Gateway; this route has nothing
+# to do with what this scenario demonstrates.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tlwc-unrelated-route
+  namespace: tlwc
+spec:
+  parentRefs:
+    - name: tlwc-gateway
+  rules:
+    - backendRefs:
+        - name: tlwc-unrelated-service
+          port: 8080

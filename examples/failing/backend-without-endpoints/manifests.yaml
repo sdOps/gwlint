@@ -1,0 +1,9 @@
+# spec.endpoints is missing entirely, which is schema-valid: MinItems=1 only
+# applies once the list is present. Every backendRef resolving here programs
+# an Envoy cluster with no members, so it fails at the gateway.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: bwe-upstream
+  namespace: bwe
+spec: {}

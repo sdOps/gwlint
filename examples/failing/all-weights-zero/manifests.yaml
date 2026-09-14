@@ -1,0 +1,17 @@
+# Every backendRef in the rule is weighted 0. The rule still matches requests
+# and takes them from any less specific rule, then has nowhere to send them:
+# the leftover shape of a canary dialled to 0 after the old backend was removed.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: awz-route
+  namespace: awz
+spec:
+  rules:
+    - backendRefs:
+        - name: awz-old-service
+          port: 8080
+          weight: 0
+        - name: awz-new-service
+          port: 8080
+          weight: 0

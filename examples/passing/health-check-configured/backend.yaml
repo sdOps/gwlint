@@ -1,3 +1,6 @@
+# Two endpoints, not one: with the passive health check below, ejecting an
+# unhealthy one has somewhere else to fail over to, which is what the health
+# check is actually for.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -7,4 +10,7 @@ spec:
   endpoints:
     - fqdn:
         hostname: partner-api.example.com
+        port: 443
+    - fqdn:
+        hostname: partner-api-backup.example.com
         port: 443

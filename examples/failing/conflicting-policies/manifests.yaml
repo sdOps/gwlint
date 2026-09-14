@@ -1,0 +1,25 @@
+# Two BackendTrafficPolicies target the same HTTPRoute. Envoy Gateway attaches
+# only the first by creation timestamp and rejects the other as Conflicted;
+# both manifests are individually valid, so nothing but reading them together
+# shows the problem.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: cp-timeouts
+  namespace: cp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: cp-route
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: cp-retries
+  namespace: cp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: cp-route

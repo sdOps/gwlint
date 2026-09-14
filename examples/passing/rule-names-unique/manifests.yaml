@@ -1,0 +1,58 @@
+# The same shape with each named rule given its own name, so a policy
+# sectionName addresses exactly one of them. The third rule is unnamed, which
+# is fine however many times it happens: an unnamed rule is not addressable by
+# sectionName at all, so it collides with nothing.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: uniquerule-gateway
+  namespace: uniquerule
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uniquerule-checkout
+  namespace: uniquerule
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: uniquerule-route
+  namespace: uniquerule
+spec:
+  parentRefs:
+    - name: uniquerule-gateway
+  rules:
+    - name: checkout
+      matches:
+        - path:
+            type: PathPrefix
+            value: /checkout
+      backendRefs:
+        - name: uniquerule-checkout
+          port: 8080
+    - name: checkout-express
+      matches:
+        - path:
+            type: PathPrefix
+            value: /checkout/express
+      backendRefs:
+        - name: uniquerule-checkout
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: uniquerule-checkout
+          port: 8080

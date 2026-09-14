@@ -1,0 +1,8 @@
+name: "dangling-certificate-ref"
+description: "Flag TLS listeners whose certificateRefs name a Secret that is not present, so the listener is never programmed and TLS handshakes on it fail"
+remediation: "Correct the certificateRef to name an existing Secret, or include the manifests that define it in the same gwlint invocation. Gateway API resolves a certificateRef when the Gateway is programmed, not when it is applied: a name that resolves to nothing leaves the listener with ResolvedRefs=False and every TLS handshake on that port failing."
+scope:
+  objectKinds:
+    - Gateway
+    - ListenerSet
+template: "dangling-certificate-ref"

@@ -1,0 +1,8 @@
+name: "missing-certificate-grant"
+description: "Flag TLS listeners whose certificateRefs cross into another namespace with no ReferenceGrant permitting it, so the listener is never programmed"
+remediation: "Add a ReferenceGrant in the Secret's namespace whose from names the group gateway.networking.k8s.io and the kind declaring the listener, in the listener's namespace, and whose to names the core group and kind Secret. A grant on a Gateway does not cover its ListenerSets, and one on a ListenerSet does not cover the parent Gateway. Without it the listener gets ResolvedRefs=False with reason RefNotPermitted even though the Secret exists."
+scope:
+  objectKinds:
+    - Gateway
+    - ListenerSet
+template: "missing-certificate-grant"

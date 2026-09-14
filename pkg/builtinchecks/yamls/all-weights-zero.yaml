@@ -1,0 +1,11 @@
+name: "all-weights-zero"
+description: "Flag route rules that set weight 0 on every backendRef, so the rule matches requests and then forwards them to nothing"
+remediation: "Give at least one backendRef in the rule a weight above 0, or remove the rule so its traffic falls through to one that serves it. Weight 0 means the backend takes no traffic, and a rule whose weights are all 0 still matches requests; each weight is valid on its own, so nothing rejects the combination."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "all-weights-zero"

@@ -1,0 +1,15 @@
+# The same shape, with the second listener on its own port.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: portsok-gateway
+  namespace: portsok
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: web
+      port: 8080
+      protocol: HTTP
+    - name: raw-tcp
+      port: 8081
+      protocol: TCP

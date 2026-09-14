@@ -1,0 +1,39 @@
+# The same shape, with a second endpoint for the health check to fail over to.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: hchf-policy
+  namespace: hchf
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: hchf-route
+  healthCheck:
+    passive: {}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hchf-route
+  namespace: hchf
+spec:
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: hchf-upstream
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: hchf-upstream
+  namespace: hchf
+spec:
+  endpoints:
+    - fqdn:
+        hostname: hchf-a.example.com
+        port: 443
+    - fqdn:
+        hostname: hchf-b.example.com
+        port: 443

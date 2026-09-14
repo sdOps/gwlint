@@ -66,43 +66,57 @@ func TestLintFlagsTheFailingExamples(t *testing.T) {
 
 	// A non-nil error is what gives gwlint its non-zero exit code.
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found 6 lint errors")
-
-	require.Len(t, result.Reports, 6)
+	assert.Contains(t, err.Error(), "found 30 lint errors")
+	require.Len(t, result.Reports, 30)
 	assert.Equal(t, gwversion.Get(), result.Summary.KubeLinterVersion)
+
+	// Every registered check has at least one scenario under examples/failing
+	// that demonstrates it; this is the single check that keeps that promise
+	// as checks are added, without pinning every message verbatim.
+	registeredChecks := make([]string, 0, len(result.Checks))
+	for _, chk := range result.Checks {
+		registeredChecks = append(registeredChecks, chk.Name)
+	}
+	seenChecks := map[string]int{}
 	for _, report := range result.Reports {
-		assert.Contains(t,
-			[]string{"fqdn-backend-cold-start", "dangling-parent-ref", "dangling-backend-ref"}, report.Check)
-		assert.NotEmpty(t, report.Remediation)
+		seenChecks[report.Check]++
+		assert.NotEmpty(t, report.Remediation, "check %q has no remediation text", report.Check)
 		assert.NotEmpty(t, report.Object.Metadata.FilePath)
 	}
+	for _, name := range registeredChecks {
+		assert.Positive(t, seenChecks[name], "check %q has no failing example under examples/failing", name)
+	}
+	// fqdn-backend-cold-start is the one check with several distinct scenarios
+	// (direct route, Gateway-level, cross-namespace, a v1alpha2 TCPRoute); every
+	// other check demonstrates exactly once.
+	for name, count := range seenChecks {
+		if name == "fqdn-backend-cold-start" {
+			assert.Equal(t, 4, count, "fqdn-backend-cold-start scenario count changed; update this assertion")
+			continue
+		}
+		assert.Equal(t, 1, count, "check %q fired %d times in examples/failing, expected exactly 1; "+
+			"either a new scenario was added for it or an unrelated scenario is bleeding into it", name, count)
+	}
 
-	assert.ElementsMatch(t, []string{
-		`BackendTrafficPolicy has no health check, but targets HTTPRoute "partner-api-route", ` +
-			`which routes to Backend "partner-api-upstream" with FQDN endpoint "partner-api.example.com"; ` +
-			`this backend resolves via DNS at startup and can 503 before the name resolves`,
-		`BackendTrafficPolicy has no health check, but targets Gateway "public-gateway", ` +
-			`whose attached HTTPRoute "billing-api-route" routes to Backend "billing-api-upstream" ` +
-			`with FQDN endpoint "billing-api.example.com"; this backend resolves via DNS at startup ` +
-			`and can 503 before the name resolves`,
-		// A Gateway-level policy reaching a route in another namespace: the
-		// backendRef omits a namespace, so it resolves in the route's.
-		`BackendTrafficPolicy has no health check, but targets Gateway "edge-gateway", ` +
-			`whose attached HTTPRoute "ledger-route" routes to Backend "ledger-upstream" ` +
-			`with FQDN endpoint "ledger.example.com"; this backend resolves via DNS at startup ` +
-			`and can 503 before the name resolves`,
-		// A TCPRoute, authored as v1alpha2: both the route kind and the API
-		// version were invisible to gwlint before.
-		`BackendTrafficPolicy has no health check, but targets TCPRoute "database-route", ` +
-			`which routes to Backend "database-upstream" with FQDN endpoint "database.example.com"; ` +
-			`this backend resolves via DNS at startup and can 503 before the name resolves`,
-		// A parentRef naming a Gateway that is not there.
-		`HTTPRoute "reporting-route" attaches to Gateway "reportng-gateway" in namespace "reporting", ` +
-			`which is not present; the route will never be programmed and its traffic will not be served`,
-		// A backendRef naming a Service that is not there.
-		`HTTPRoute "storefront-route" routes to Service "storefront-chekout" in namespace "storefront", ` +
-			`which is not present; requests matching that rule have nowhere to go`,
-	}, messagesFrom(result))
+	// Spot-check message content for the checks with the most surface for a
+	// regression: cross-namespace backendRef resolution and the two dangling
+	// reference checks that started this out.
+	messages := messagesFrom(result)
+	assert.Contains(t, messages,
+		`BackendTrafficPolicy has no health check, but targets HTTPRoute "partner-api-route", `+
+			`which routes to Backend "partner-api-upstream" with FQDN endpoint "partner-api.example.com"; `+
+			`this backend resolves via DNS at startup and can 503 before the name resolves`)
+	assert.Contains(t, messages,
+		`BackendTrafficPolicy has no health check, but targets Gateway "edge-gateway", `+
+			`whose attached HTTPRoute "ledger-route" routes to Backend "ledger-upstream" `+
+			`with FQDN endpoint "ledger.example.com"; this backend resolves via DNS at startup `+
+			`and can 503 before the name resolves`)
+	assert.Contains(t, messages,
+		`HTTPRoute "reporting-route" attaches to Gateway "reportng-gateway" in namespace "reporting", `+
+			`which is not present; the route will never be programmed and its traffic will not be served`)
+	assert.Contains(t, messages,
+		`HTTPRoute "storefront-route" routes to Service "storefront-chekout" in namespace "storefront", `+
+			`which is not present; requests matching that rule have nowhere to go`)
 }
 
 func TestLintPassesThePassingExamples(t *testing.T) {
@@ -240,11 +254,25 @@ func TestJSONOutputCarriesTheScanSummary(t *testing.T) {
 	result, err := runLint(t, examplePath(t, "failing"))
 	require.Error(t, err)
 
-	assert.Equal(t, map[string]int{"BackendTrafficPolicy": 4, "HTTPRoute": 5, "TCPRoute": 1},
-		result.Scanned.CheckedByKind, "one policy per failing scenario, plus every route")
-	assert.Equal(t, 10, result.Scanned.Checked)
+	sumByKind := 0
+	for kind, n := range result.Scanned.CheckedByKind {
+		assert.Positive(t, n, "kind %q has a non-positive count", kind)
+		sumByKind += n
+	}
+	assert.Equal(t, result.Scanned.Checked, sumByKind, "CheckedByKind must sum to Checked")
+	assert.Positive(t, result.Scanned.Checked)
+
+	// Every route kind and the two Envoy-scoped kinds are exercised by
+	// examples/failing; a check added for a kind not already in this list
+	// needs its own examples/failing scenario, which is what keeps it here.
+	for _, kind := range []string{
+		"BackendTrafficPolicy", "Gateway", "HTTPRoute", "TCPRoute", "ListenerSet", "Backend",
+	} {
+		assert.Positive(t, result.Scanned.CheckedByKind[kind], "expected at least one %s to be checked", kind)
+	}
 	assert.Equal(t,
-		[]string{"BackendTrafficPolicy", "GRPCRoute", "HTTPRoute", "TCPRoute", "TLSRoute", "UDPRoute"},
+		[]string{"Backend", "BackendTrafficPolicy", "GRPCRoute", "Gateway", "HTTPRoute", "ListenerSet",
+			"TCPRoute", "TLSRoute", "UDPRoute"},
 		result.Scanned.LooksFor)
 	assert.Positive(t, result.Scanned.Objects)
 	assert.Positive(t, result.Scanned.Files)

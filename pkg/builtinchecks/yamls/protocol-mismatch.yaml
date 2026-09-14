@@ -1,0 +1,11 @@
+name: "protocol-mismatch"
+description: "Flag routes attached to a listener whose protocol cannot carry their kind, such as an HTTPRoute on a TCP listener, so the route is never programmed"
+remediation: "Attach the route to a listener whose protocol carries its kind, or change the listener protocol. Gateway API derives the route kinds a listener accepts from its protocol, and a route of any other kind is never programmed onto it; the reason appears only in status conditions."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "protocol-mismatch"

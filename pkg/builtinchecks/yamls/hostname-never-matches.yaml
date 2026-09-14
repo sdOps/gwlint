@@ -1,0 +1,11 @@
+name: "hostname-never-matches"
+description: "Flag routes whose hostnames cannot intersect the hostname of any listener they attach to, so no request can ever match the route"
+remediation: "Change the route hostname to one the listener serves, or widen the listener hostname to cover it. Gateway API intersects the two sets rather than rejecting either object: an empty intersection still attaches the route, and every request for it gets a 404."
+scope:
+  objectKinds:
+    - HTTPRoute
+    - GRPCRoute
+    - TCPRoute
+    - TLSRoute
+    - UDPRoute
+template: "hostname-never-matches"

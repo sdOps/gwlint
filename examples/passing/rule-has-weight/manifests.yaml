@@ -1,0 +1,15 @@
+# The same shape, with one backendRef actually carrying traffic.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rhw-route
+  namespace: rhw
+spec:
+  rules:
+    - backendRefs:
+        - name: rhw-old-service
+          port: 8080
+          weight: 0
+        - name: rhw-new-service
+          port: 8080
+          weight: 100

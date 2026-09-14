@@ -1,0 +1,7 @@
+name: "dangling-listener-set-parent"
+description: "Flag ListenerSets whose parentRef names a Gateway that is not present, so their listeners are never merged into a Gateway and never bound"
+remediation: "Correct the parentRef to name an existing Gateway, or include the manifests that define it in the same gwlint invocation. A ListenerSet's listeners only exist once they are merged into its parent Gateway, so a parentRef that resolves to nothing leaves every listener in the set unbound, along with the routes attached through them."
+scope:
+  objectKinds:
+    - ListenerSet
+template: "dangling-listener-set-parent"

@@ -1,0 +1,18 @@
+# checkout-gateway carries a route of its own, unrelated to the FQDN-backed
+# one below, so gateway-serves-no-routes and dangling-policy-target both stay
+# quiet: this Gateway exists and is genuinely in use, it just is not the one
+# the FQDN-backed route attaches to.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: checkout-gateway
+  namespace: default
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert

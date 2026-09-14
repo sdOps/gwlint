@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: crm-edge-public
+  namespace: crm-edge
+spec:
+  selector:
+    app: crm-edge-public
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crm-edge-internal
+  namespace: crm-edge
+spec:
+  selector:
+    app: crm-edge-internal
+  ports:
+    - port: 8080
+      targetPort: 8080

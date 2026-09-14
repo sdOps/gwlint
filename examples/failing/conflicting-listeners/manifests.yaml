@@ -1,0 +1,18 @@
+# Two listeners on the same port with protocols that cannot share it: a raw
+# TCP listener makes any HTTP/HTTPS/TLS listener on that port indistinct.
+# Nothing about either listener is individually invalid, so the manifest
+# applies and both are refused at the API server with status Conflicted.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: portclash-gateway
+  namespace: portclash
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: web
+      port: 8080
+      protocol: HTTP
+    - name: raw-tcp
+      port: 8080
+      protocol: TCP

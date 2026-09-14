@@ -1,0 +1,28 @@
+# A hostname set on a TCP listener. TCP carries no Host header and no SNI, so
+# Gateway API ignores the field entirely; the listener still admits every
+# connection on the port, which is not what naming a hostname here suggests.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: honp-gateway
+  namespace: honp
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: db
+      port: 5432
+      protocol: TCP
+      hostname: db.honp.internal
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TCPRoute
+metadata:
+  name: honp-route
+  namespace: honp
+spec:
+  parentRefs:
+    - name: honp-gateway
+  rules:
+    - backendRefs:
+        - name: honp-service
+          port: 5432

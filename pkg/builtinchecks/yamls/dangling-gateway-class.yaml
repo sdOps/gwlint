@@ -1,0 +1,7 @@
+name: "dangling-gateway-class"
+description: "Flag Gateways whose gatewayClassName names a GatewayClass that is not present, so no controller claims the Gateway and none of its listeners are ever programmed"
+remediation: "Correct gatewayClassName to name an installed GatewayClass, or include the manifests that define it in the same gwlint invocation. gatewayClassName is a free-form string: a name that matches no GatewayClass applies cleanly, and the Gateway is simply never claimed by a controller."
+scope:
+  objectKinds:
+    - Gateway
+template: "dangling-gateway-class"

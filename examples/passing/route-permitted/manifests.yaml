@@ -1,0 +1,33 @@
+# The same shape, with the listener admitting routes from all namespaces.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: rperm-gateway
+  namespace: rperm-infra
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rperm-route
+  namespace: rperm-tenant
+spec:
+  parentRefs:
+    - name: rperm-gateway
+      namespace: rperm-infra
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: rperm-upstream

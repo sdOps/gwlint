@@ -2,6 +2,7 @@ package gatewayapi
 
 import (
 	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
+	"golang.stackrox.io/kube-linter/pkg/k8sutil"
 	"golang.stackrox.io/kube-linter/pkg/lintcontext"
 	corev1 "k8s.io/api/core/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -131,4 +132,59 @@ func ResolvableBackendKind(group, kind string) bool {
 	default:
 		return false
 	}
+}
+
+// Listener is one listener on a Gateway or ListenerSet, reduced to the fields
+// a route has to agree with for traffic to flow.
+type Listener struct {
+	Owner     ObjectRef
+	Name      gatewayv1.SectionName
+	Hostname  *gatewayv1.Hostname
+	Port      gatewayv1.PortNumber
+	Protocol  gatewayv1.ProtocolType
+	Allowed   *gatewayv1.AllowedRoutes
+	OwnerKind string
+}
+
+// ListenersOf returns the listeners a Gateway or ListenerSet declares, or nil
+// if obj is neither.
+func ListenersOf(obj k8sutil.Object) []Listener {
+	switch parent := obj.(type) {
+	case *gatewayv1.Gateway:
+		owner := ObjectRef{Kind: gwobjectkinds.Gateway, Namespace: parent.Namespace, Name: parent.Name}
+		listeners := make([]Listener, 0, len(parent.Spec.Listeners))
+		for _, l := range parent.Spec.Listeners {
+			listeners = append(listeners, Listener{
+				Owner: owner, OwnerKind: gwobjectkinds.Gateway,
+				Name: l.Name, Hostname: l.Hostname, Port: l.Port,
+				Protocol: l.Protocol, Allowed: l.AllowedRoutes,
+			})
+		}
+		return listeners
+	case *gatewayv1.ListenerSet:
+		owner := ObjectRef{Kind: gwobjectkinds.ListenerSet, Namespace: parent.Namespace, Name: parent.Name}
+		listeners := make([]Listener, 0, len(parent.Spec.Listeners))
+		for _, l := range parent.Spec.Listeners {
+			listeners = append(listeners, Listener{
+				Owner: owner, OwnerKind: gwobjectkinds.ListenerSet,
+				Name: l.Name, Hostname: l.Hostname, Port: l.Port,
+				Protocol: l.Protocol, Allowed: l.AllowedRoutes,
+			})
+		}
+		return listeners
+	default:
+		return nil
+	}
+}
+
+// ListenersByOwner indexes every listener in the context by the Gateway or
+// ListenerSet that declares it.
+func ListenersByOwner(lintCtx lintcontext.LintContext) map[ObjectRef][]Listener {
+	byOwner := make(map[ObjectRef][]Listener)
+	for _, obj := range lintCtx.Objects() {
+		for _, l := range ListenersOf(obj.K8sObject) {
+			byOwner[l.Owner] = append(byOwner[l.Owner], l)
+		}
+	}
+	return byOwner
 }

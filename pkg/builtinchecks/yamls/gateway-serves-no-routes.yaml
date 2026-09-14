@@ -1,0 +1,7 @@
+name: "gateway-serves-no-routes"
+description: "Flag Gateways that no route in the manifest set attaches to, so the Gateway is provisioned and serves no traffic"
+remediation: "Name the Gateway in a route's parentRefs, or in the parentRef of a ListenerSet a route attaches to, or delete the Gateway. Nothing in Gateway API couples a Gateway to a route, so a Gateway with none still provisions a data plane and an address and answers requests with nothing behind them. If the routes live in another chart or repo, include them in the same gwlint invocation."
+scope:
+  objectKinds:
+    - Gateway
+template: "gateway-serves-no-routes"

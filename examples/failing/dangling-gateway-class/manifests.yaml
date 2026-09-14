@@ -1,0 +1,25 @@
+# gatewayClassName is a free-form string. This one names no GatewayClass in
+# the set, so no controller ever claims the Gateway: no data plane, no
+# address, every attached route left unprogrammed, and the manifest applies
+# cleanly throughout.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: dgc-gateway
+  namespace: dgc
+spec:
+  gatewayClassName: dgc-typo-class
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: placeholder-cert
