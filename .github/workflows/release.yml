@@ -38,6 +38,21 @@ jobs:
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
+      # Without this, mise run check's lint step hit a cold module download
+      # for gwlint's whole (kube-linter-derived) dependency graph, competing
+      # with build/vet/test for the same downloads, and blew golangci-lint's
+      # 5m timeout before go/packages finished loading. Same key as ci.yml's
+      # lint job, so this is usually already warm from the last CI run on
+      # main by the time anyone dispatches a release.
+      - name: Cache Go modules and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-lint-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-lint-
+
       # The same gate a pull request has to pass, run again here rather than
       # trusted from the branch's last CI run: workflow_dispatch can be run
       # from any ref, and nothing stops it being fired against a branch that
