@@ -8,8 +8,8 @@ It finds semantic misconfigurations that schema validators cannot see: a manifes
 It is built by importing kube-linter's engine packages as a library rather than forking them, so check logic can be upstreamed into kube-linter later with minimal rework.
 That constraint shapes most of the architecture below.
 
-`ROADMAP.md` tracks coverage: what a Gateway API linter should check, what is done, and what order to work in.
-Read it before starting a new check, and tick the roadmap box when one lands.
+The README's Checks section tracks coverage: what's implemented, grouped into tiers by how badly the failure it catches hides.
+Read it before starting a new check, and add a row when one lands.
 
 ## Build and test
 
@@ -149,7 +149,7 @@ CI is unaffected.
 ## Status
 
 27 checks, covering core Gateway API (Tiers 1 through 4) and Envoy Gateway (Tier 5).
-`ROADMAP.md` is the source of truth for what is done and what is left; `dangling-extension-ref` is the one remaining check.
+The README's Status section is the source of truth for what is done and what is left; `dangling-extension-ref` is the one remaining check.
 
 The repo is private but is intended to be made public, so write user-facing docs for an outside reader.
 Before that happens it still needs a release process (`pkg/version/version.go` is a hardcoded constant, not stamped at link time), tagged versions, a `SECURITY.md`, and a `CONTRIBUTING.md`.

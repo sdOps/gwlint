@@ -8,7 +8,7 @@ Read it first; this file assumes it.
 ## Before you start
 
 Open an issue for anything beyond a small fix, so the approach can be agreed before you write the code.
-For a new check, `ROADMAP.md` tracks what is already planned and in what order.
+For a new check, the README's Checks section shows what's already covered and how checks are grouped into tiers, so a new one lands in the right spot.
 
 ## Making a change
 

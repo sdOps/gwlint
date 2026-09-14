@@ -12,16 +12,18 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 
 ## Status
 
-gwlint runs 27 checks across every Gateway API route kind, `Gateway`, `ListenerSet`, `GatewayClass`, `ReferenceGrant`, and Envoy Gateway's `BackendTrafficPolicy` and `Backend`.
-`ROADMAP.md` tracks what a Gateway API linter should cover and where gwlint is against it: 27 of 28 identified checks, ordered by how badly the failure they catch hides.
-One check, `dangling-extension-ref`, remains: it needs its own design pass, since a filter's `extensionRef` can name an object of any kind, including ones gwlint has no typed knowledge of.
+gwlint runs 27 of 28 identified checks across every Gateway API route kind, `Gateway`, `ListenerSet`, `GatewayClass`, `ReferenceGrant`, and Envoy Gateway's `BackendTrafficPolicy` and `Backend`.
+They're grouped below into five tiers, ordered by how badly the failure they catch hides: a misconfiguration that makes a manifest invalid gets caught by a schema validator, and one that applies cleanly and silently serves nothing is what gwlint is for.
+One check, `dangling-extension-ref`, remains undone: it needs its own design pass, since a filter's `extensionRef` can name an object of any kind, including ones gwlint has no typed knowledge of.
 
 ## Scope
 
 Checks fall into two groups.
-Vendor-neutral checks use only core Gateway API types and work against any implementation: Tiers 1 through 4 in `ROADMAP.md`, 23 checks in total.
+Vendor-neutral checks use only core Gateway API types and work against any implementation: Tiers 1 through 4 below, 23 checks in total.
 Vendor-specific checks key off an implementation's own CRDs, and today that means Envoy Gateway's: Tier 5, 4 checks.
 This first pass covers core Gateway API resources plus Envoy Gateway's CRDs specifically, not every implementation's vendor extensions.
+
+Two other things a Gateway API linter might do are deliberately out of scope, because something else already does them: schema validity is kubeconform's job (kube-linter already wraps it as its own `schema-validation` check), and workload-level checks such as "container runs as root" are kube-linter's own domain, which gwlint imports the engine of rather than duplicating.
 
 ## Checks
 
@@ -94,6 +96,8 @@ The table below is the index; `gwlint templates list` prints the same key and de
 
 **Tier 1: silent non-attachment**
 
+The route exists, the apply succeeds, the status conditions say why, and nobody reads status conditions. Every one of these ends with traffic going nowhere.
+
 | Check | Scope | Flags |
 |---|---|---|
 | `listener-not-found` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes whose parentRefs sectionName names a listener the Gateway does not declare, so the route is never accepted onto it. |
@@ -102,6 +106,8 @@ The table below is the index; `gwlint templates list` prints the same key and de
 | `protocol-mismatch` | `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute`, `UDPRoute` | Flag routes attached to a listener whose protocol cannot carry their kind, such as an HTTPRoute on a TCP listener, so the route is never programmed. |
 
 **Tier 2: reference integrity**
+
+A reference that resolves to nothing. Applies cleanly, fails at request time.
 
 | Check | Scope | Flags |
 |---|---|---|
@@ -113,6 +119,8 @@ The table below is the index; `gwlint templates list` prints the same key and de
 | `dangling-policy-target` | `BackendTrafficPolicy` | Flag BackendTrafficPolicies whose targetRefs name a Gateway, ListenerSet or route that is not present, so the policy attaches to nothing and its settings never apply. |
 
 **Tier 3: route semantics**
+
+The route attaches and resolves, but does not do what it looks like it does.
 
 | Check | Scope | Flags |
 |---|---|---|
@@ -133,6 +141,8 @@ The table below is the index; `gwlint templates list` prints the same key and de
 | `gateway-serves-no-routes` | `Gateway` | Flag Gateways that no route in the manifest set attaches to, so the Gateway is provisioned and serves no traffic. |
 
 **Tier 5: Envoy Gateway**
+
+Only after the core is covered.
 
 | Check | Scope | Flags |
 |---|---|---|
@@ -178,9 +188,9 @@ gwlint version        # prints the version
 gwlint templates list # prints the checks this binary knows about
 ```
 
-There are no tagged releases and no prebuilt binaries yet, so there is nothing to download and nothing to pin to.
-`gwlint version` reports `0.1.0-dev` from every build regardless of which commit it came from, since the version is still a constant in `pkg/version/version.go` rather than stamped in at link time.
-Both of those are release-process work that Phase 1 deliberately left alone.
+A build made via `mise run build` or the release workflow stamps `gwlint version` with the `git describe` of the commit it came from, or the release tag once one exists.
+A plain `go build` or `go run` with no ldflags falls back to reporting `dev`, rather than claiming a version it can't back up.
+There are no tagged releases or prebuilt binaries yet; `.github/workflows/release.yml` cuts one when a maintainer manually dispatches it.
 
 ## Usage
 
