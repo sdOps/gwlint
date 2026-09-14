@@ -85,6 +85,11 @@ jobs:
 
       - name: Tag and push
         run: |
+          # An annotated tag is a commit-like object and needs an identity to
+          # create, same as a commit does; actions/checkout sets up the repo
+          # for fetch/push but never configures one.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.version }}" -m "${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
 
