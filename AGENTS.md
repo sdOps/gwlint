@@ -70,8 +70,7 @@ These are not preferences.
 - **Prove a new test can fail.** Revert the fix, confirm the test goes red, restore it. An assertion that never failed is not evidence.
 - **Never hand-edit `.govulncheck-allowlist` without the reasoning.** Each entry states why the advisory is unreachable.
   An entry whose reason is wrong is worse than no entry, because it looks like somebody checked.
-- **This is not a Convoke repo.** It lives on public github.com under `sdOps`.
-  Do not apply Convoke conventions: no `convoke.ghe.com`, no conventional-commit prefixes, no `convoke/platform-checks` ruleset.
+- **This repo does not belong to any single employer.** Do not apply an employer's internal conventions here: no private GitHub Enterprise host, no organization-specific PR ruleset or bypass label, no assumption that a skill or workflow tied to one company's tooling applies.
 - **Do not add `Co-authored-by:` trailers** to commits.
 
 ## Conventions
@@ -87,9 +86,10 @@ Match kube-linter's own Go conventions for anything that may be upstreamed:
 - Comments explain why, not what, at the density kube-linter's own templates use.
 - No speculative abstraction. Generalize on the second or third real case, not the first.
 
-Commit messages: plain imperative subject, sentence case, no type prefix (`Resolve backendRefs in the route's namespace, not the policy's`).
+Commit messages: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`), imperative subject, sentence case after the prefix.
 Explain why in the body, including what was rejected and why.
-Match the existing log.
+Earlier commits in this repo predate the convention and are not in this format; match it for new commits regardless.
+`cliff.toml` and the release workflow both key off these prefixes to build the changelog, so getting the type right matters beyond style.
 
 Prose in Markdown: one sentence per line.
 
@@ -138,7 +138,7 @@ Note that `golangci-lint` v2 splits linting and formatting: `run` does **not** r
 
 ## Environment quirks
 
-The development machine's Go environment is configured for a private GitHub Enterprise host (`GOPROXY=direct`, `GOPRIVATE=convoke.ghe.com`), which cannot resolve public modules.
+Some development machines have Go configured for a private GitHub Enterprise host (`GOPROXY=direct`, `GOPRIVATE` set to that host), which cannot resolve public modules.
 `go mod tidy`, `go get` and `govulncheck` need an override in this repo:
 
 ```bash

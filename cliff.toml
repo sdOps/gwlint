@@ -1,0 +1,60 @@
+# git-cliff configuration: https://git-cliff.org/docs/configuration
+#
+# Drives two things: the changelog attached to each GitHub Release (generated
+# by .github/workflows/release.yml, never committed to the repo as a file),
+# and, when no version is given to that workflow, the next version itself via
+# git-cliff's own Conventional Commits bump detection.
+#
+# Commits in this repo before the switch to Conventional Commits do not carry
+# a feat:/fix:/etc. prefix. filter_commits is left false and an unmatched
+# commit falls through to "Other", so the very first release still lists
+# everything since the project's first commit instead of silently dropping
+# its entire pre-convention history.
+
+[changelog]
+header = ""
+body = """
+{% if version %}
+## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}
+## Unreleased
+{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | trim | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[bump]
+# No prior tag exists yet, so git-cliff has nothing to bump from. Anchors the
+# very first release at v0.1.0 rather than the un-prefixed "0.1.0" default,
+# which fails tag_pattern below.
+initial_tag = "v0.1.0"
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+filter_commits = false
+tag_pattern = "v[0-9]*"
+skip_tags = ""
+protect_breaking_commits = false
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactoring" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^ci", group = "CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "Chores" },
+  { message = "^revert", group = "Reverts" },
+  { message = "^Merge", skip = true },
+  { message = ".*", group = "Other" },
+]

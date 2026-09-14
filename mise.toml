@@ -1,10 +1,15 @@
 [tools]
+git-cliff = "2.14.1"
 go = "1.26.8"
 golangci-lint = "2.12.2"
 
 [tasks.build]
-description = "Build the gwlint binary"
-run = "go build -o gwlint ./cmd/gwlint"
+description = "Build the gwlint binary, stamped with the current git describe"
+run = '''
+set -eu
+version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+go build -ldflags "-X github.com/sdOps/gwlint/pkg/version.version=$version" -o gwlint ./cmd/gwlint
+'''
 
 [tasks.test]
 description = "Run unit tests"
