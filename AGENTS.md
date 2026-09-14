@@ -127,11 +127,12 @@ Hard-won, and each one was a real bug:
 
 ## CI
 
-Three workflows, all using SHA-pinned actions:
+Four workflows, all using SHA-pinned actions:
 
 - `ci.yml`: test matrix across ubuntu, macos and windows, plus Linux-only examples, lint and tidy jobs.
 - `vulncheck.yml`: govulncheck on push, PR, and nightly. Separate because the vulnerability database changes without the repo changing.
 - `next-go.yml`: weekly canary against the newest stable Go. Gates nothing. Run it before bumping the Go pin.
+- `pr-title.yml`: lints the PR title against Conventional Commits. Titles, not commits, because this repo squash-merges and the title becomes the commit message on `main`.
 
 Note that `golangci-lint` v2 splits linting and formatting: `run` does **not** report formatting problems, only `fmt` does. Both have to pass, which is why `fmt-check` exists.
 

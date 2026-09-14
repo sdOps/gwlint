@@ -16,7 +16,8 @@ One check, `dangling-extension-ref`, remains undone: a filter's `extensionRef` c
 ## Scope
 
 Vendor-neutral checks (Tiers 1-4, 23 checks) use only core Gateway API types and work against any implementation.
-Vendor-specific checks (Tier 5, 4 checks) key off an implementation's own CRDs, and today that means Envoy Gateway's.
+Vendor-specific checks (Tier 5, 4 checks) key off an implementation's own CRDs; Envoy Gateway is the only one covered so far.
+Adding another implementation (Istio, Cilium, Kong, GKE Gateway, ...) means a new Tier 5 package keying off that implementation's own CRDs, not a rewrite: the vendor-neutral tiers already work against it today.
 
 Schema validity and workload-level checks (like "container runs as root") are out of scope on purpose: kubeconform and kube-linter already own those.
 

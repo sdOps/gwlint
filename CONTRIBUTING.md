@@ -32,6 +32,8 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/): `fe
 Explain why in the body, including what was rejected and why.
 `cliff.toml` and the release workflow both key off these prefixes to build the changelog and pick the next version, so the type has to be right, not just close.
 
+`.github/workflows/pr-title.yml` enforces this on the pull request title, not on individual commits: this repo squash-merges, so the title is what actually becomes the commit message on `main`.
+
 Commits on `main` must be signed; GitHub will tell you if a commit in your pull request isn't.
 See [GitHub's guide to commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification) if you haven't set this up before.
 
