@@ -79,9 +79,22 @@ Every check has a matching failing/passing pair under `examples/`, and its own p
 
 ## Installation
 
-gwlint is a single self-contained binary with no third-party runtime dependencies. Building it needs Go 1.26.8 or newer.
+gwlint is a single self-contained binary with no third-party runtime dependencies.
+
+### Prebuilt binary
+
+Each [release](https://github.com/sdOps/gwlint/releases) publishes cross-compiled binaries for linux, darwin and windows (amd64 and arm64, except windows/arm64) plus a `SHA256SUMS` file covering all of them:
+
+```sh
+curl -LO https://github.com/sdOps/gwlint/releases/download/<version>/gwlint-<version>-linux-amd64
+curl -LO https://github.com/sdOps/gwlint/releases/download/<version>/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+chmod +x gwlint-<version>-linux-amd64
+```
 
 ### go install
+
+Needs Go 1.26.8 or newer.
 
 ```sh
 go install github.com/sdOps/gwlint/cmd/gwlint@latest
@@ -106,8 +119,8 @@ gwlint version        # prints the version
 gwlint templates list # prints the checks this binary knows about
 ```
 
-A build made via `mise run build` or the release workflow stamps `gwlint version` with the `git describe` of the commit it came from, or the release tag once one exists.
-A plain `go build` or `go run` with no ldflags falls back to reporting `dev`, rather than claiming a version it can't back up.
+A prebuilt binary or a `mise run build` from a `git clone` reports the real version: `git describe` for a local build, or the tag itself for a release binary.
+`go install` and a plain `go build`/`go run` report `dev` instead: `go install` builds from the module cache, which has no `.git` for `git describe` to read, and neither passes the `-ldflags` a version needs.
 
 ## Usage
 
