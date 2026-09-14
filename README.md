@@ -93,17 +93,9 @@ sha256sum -c SHA256SUMS --ignore-missing
 chmod +x gwlint-<version>-linux-amd64
 ```
 
-### go install
+### From source
 
 Needs Go 1.26.8 or newer.
-
-```sh
-go install github.com/sdOps/gwlint/cmd/gwlint@latest
-```
-
-This puts `gwlint` in `$(go env GOBIN)`, or in `$(go env GOPATH)/bin` when `GOBIN` is unset; make sure whichever one applies is on your `PATH`.
-
-### From source
 
 ```sh
 git clone https://github.com/sdOps/gwlint.git
@@ -113,6 +105,8 @@ go build -o gwlint ./cmd/gwlint
 
 Or, if you use [mise](https://mise.jdx.dev/), `mise install && mise run build` picks up the pinned Go toolchain from `mise.toml` instead of whatever Go you happen to have.
 
+`go install github.com/sdOps/gwlint/cmd/gwlint@<version>` does not work, and can't: Go refuses to `go install` any module whose `go.mod` has `replace` directives, and gwlint's needs them (see `AGENTS.md`'s Dependency pins note for why). Use a prebuilt binary or build from source instead.
+
 ### Verifying
 
 ```sh
@@ -121,7 +115,7 @@ gwlint templates list # prints the checks this binary knows about
 ```
 
 A prebuilt binary or a `mise run build` from a `git clone` reports the real version: `git describe` for a local build, or the tag itself for a release binary.
-`go install` and a plain `go build`/`go run` report `dev` instead: `go install` builds from the module cache, which has no `.git` for `git describe` to read, and neither passes the `-ldflags` a version needs.
+A plain `go build`/`go run` reports `dev` instead, since neither passes the `-ldflags` a version needs.
 
 ## Usage
 
