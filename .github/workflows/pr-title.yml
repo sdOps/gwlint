@@ -1,0 +1,37 @@
+name: PR Title
+
+# Conventional Commits is documented in AGENTS.md/CONTRIBUTING.md as the
+# format, but nothing enforced it: cliff.toml and the release workflow key
+# off the type prefix on the commit that lands on main, and since this repo
+# squash-merges, that commit's message is the PR title by default. So this
+# lints the title, not every commit inside the branch; a WIP commit history
+# that gets squashed away doesn't need to comply on its own.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
+          requireScope: false
