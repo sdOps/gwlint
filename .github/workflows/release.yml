@@ -189,6 +189,10 @@ jobs:
       - name: Attach binaries and publish
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # gh infers the target repo from the current git checkout otherwise,
+          # and this job has none: it only downloads artifacts, it never
+          # checks out the source.
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release upload "${{ needs.tag.outputs.version }}" dist/* --clobber
           gh release edit "${{ needs.tag.outputs.version }}" --draft=false
