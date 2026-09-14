@@ -15,7 +15,6 @@ gwlint is built by importing kube-linter's own Go packages as a library and addi
 gwlint runs 27 checks across every Gateway API route kind, `Gateway`, `ListenerSet`, `GatewayClass`, `ReferenceGrant`, and Envoy Gateway's `BackendTrafficPolicy` and `Backend`.
 `ROADMAP.md` tracks what a Gateway API linter should cover and where gwlint is against it: 27 of 28 identified checks, ordered by how badly the failure they catch hides.
 One check, `dangling-extension-ref`, remains: it needs its own design pass, since a filter's `extensionRef` can name an object of any kind, including ones gwlint has no typed knowledge of.
-`INSTRUCTION.md` holds the original phase plan, including a Phase 3 plan to validate the architecture against a second Gateway API implementation once the Envoy-specific set is further along.
 
 ## Scope
 

@@ -9,8 +9,7 @@ It is built by importing kube-linter's engine packages as a library rather than 
 That constraint shapes most of the architecture below.
 
 `ROADMAP.md` tracks coverage: what a Gateway API linter should check, what is done, and what order to work in.
-`INSTRUCTION.md` holds the original engagement brief and phase plan.
-Read both before starting a new check, and tick the roadmap box when one lands.
+Read it before starting a new check, and tick the roadmap box when one lands.
 
 ## Build and test
 
@@ -151,7 +150,6 @@ CI is unaffected.
 
 27 checks, covering core Gateway API (Tiers 1 through 4) and Envoy Gateway (Tier 5).
 `ROADMAP.md` is the source of truth for what is done and what is left; `dangling-extension-ref` is the one remaining check.
-`INSTRUCTION.md` holds the original Phase 1 engagement brief and the Phase 3 multi-vendor plan.
 
 The repo is private but is intended to be made public, so write user-facing docs for an outside reader.
 Before that happens it still needs a release process (`pkg/version/version.go` is a hardcoded constant, not stamped at link time), tagged versions, a `SECURITY.md`, and a `CONTRIBUTING.md`.

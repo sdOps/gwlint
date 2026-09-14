@@ -1,7 +1,7 @@
 # Coverage roadmap
 
 What a Gateway API linter should cover, and where gwlint is against it.
-Core Gateway API first, then implementation-specific checks; see `INSTRUCTION.md` for the original phase plan.
+Core Gateway API first, then implementation-specific checks.
 
 Ordered by how badly the failure hides. A misconfiguration that makes a manifest invalid gets caught by a schema validator.
 One that applies cleanly and silently serves nothing is what gwlint is for.
