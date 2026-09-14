@@ -135,6 +135,13 @@ Three workflows, all using SHA-pinned actions:
 
 Note that `golangci-lint` v2 splits linting and formatting: `run` does **not** report formatting problems, only `fmt` does. Both have to pass, which is why `fmt-check` exists.
 
+## Dependency pins
+
+`go.mod` carries `replace` directives pinning `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, and `helm.sh/helm/v3` down to the versions kube-linter v0.8.3 itself depends on.
+This is necessary, not incidental: kube-linter v0.8.3 hard-imports `k8s.io/api/autoscaling/{v2beta1,v2beta2}`, which were removed from `k8s.io/api` in v0.36.0, while Envoy Gateway v1.9.1 requires `k8s.io/api` >= v0.36.3 for its own (unused by gwlint) Helm chart tooling.
+Without the `replace` directives, Go's minimum-version-selection would pick the newer, incompatible version and kube-linter's own source would fail to compile.
+Revisit these pins whenever kube-linter or Envoy Gateway is upgraded.
+
 ## Environment quirks
 
 Some development machines have Go configured for a private GitHub Enterprise host (`GOPROXY=direct`, `GOPRIVATE` set to that host), which cannot resolve public modules.
