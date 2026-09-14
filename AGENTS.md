@@ -115,6 +115,7 @@ Hard-won, and each one was a real bug:
 - With no `mergeType` set, Envoy Gateway applies **only the most specific** policy, so a route-level policy displaces an inherited Gateway-level one.
 - The attachment hierarchy is Gateway to ListenerSet to Route. A Gateway-level policy reaches routes attached to a ListenerSet belonging to that Gateway.
 - `TCPRoute`, `TLSRoute` and `UDPRoute` carry `backendRefs` exactly like HTTP and gRPC routes do, and are usually authored as `v1alpha2`. `ReferenceGrant` is usually `v1beta1`.
+- `gateway.envoyproxy.io/v1alpha1` (`BackendTrafficPolicy`, `Backend`) is not stable across Envoy Gateway releases the way core Gateway API's `v1` is: v1.3.0 flipped outlier detection from enabled-by-default to disabled-by-default and changed what an empty `ALPNProtocols` means, and v1.1.0/v1.8.0 both had other breaking field changes. A manifest that looks identical can mean something different depending on which Envoy Gateway version actually applies it, which gwlint's static analysis has no way to see. This is why the release workflow stamps each release's notes with the exact `sigs.k8s.io/gateway-api`/`github.com/envoyproxy/gateway` versions pinned in `go.mod`.
 
 ## Testing
 
