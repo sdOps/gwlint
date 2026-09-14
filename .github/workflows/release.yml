@@ -1,0 +1,80 @@
+name: Release
+
+# Manual promotion, never automatic. A push to main or a merged PR is not
+# a release on its own; someone decides when main is ready to become a
+# tagged version, and dispatches this workflow to make that happen.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Version to tag, e.g. v0.2.0. Leave blank to use git-cliff's own
+          suggestion, computed from Conventional Commit types since the
+          last tag.
+        required: false
+        type: string
+
+# Needs to push a tag and create a release. Tags are a separate ref
+# namespace from branches, so the branch protection ruleset on main
+# (required signatures, required status checks) does not apply to them;
+# nothing here touches a branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # full history: git-cliff and git describe both need it
+          persist-credentials: true # need to push the tag below
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
+      # The same gate a pull request has to pass, run again here rather than
+      # trusted from the branch's last CI run: workflow_dispatch can be run
+      # from any ref, and nothing stops it being fired against a branch that
+      # was never checked.
+      - run: mise run check
+
+      - name: Determine the version to release
+        id: version
+        run: |
+          set -eu
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version=$(mise exec -- git-cliff --bumped-version)
+          fi
+          if ! echo "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version '$version' does not look like vX.Y.Z" >&2
+            exit 1
+          fi
+          if git rev-parse "$version" >/dev/null 2>&1; then
+            echo "Tag $version already exists." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        run: |
+          mise exec -- git-cliff --tag "${{ steps.version.outputs.version }}" --unreleased -o release-notes.md
+          cat release-notes.md
+
+      - name: Tag and push
+        run: |
+          git tag -a "${{ steps.version.outputs.version }}" -m "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.md
