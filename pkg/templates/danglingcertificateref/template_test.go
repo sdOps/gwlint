@@ -10,6 +10,7 @@ import (
 	"golang.stackrox.io/kube-linter/pkg/templates"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -184,4 +185,48 @@ func (s *DanglingCertificateRefTestSuite) TestReportsAcrossMultipleListeners() {
 	)
 
 	s.expect(want("https-a", "missing-a"))
+}
+
+// addCertManagerCertificate adds a cert-manager Certificate naming a Secret
+// that is not rendered directly: cert-manager's controller creates it at
+// runtime from this object, so its absence from the manifest set is not
+// evidence it is missing from the cluster.
+func (s *DanglingCertificateRefTestSuite) addCertManagerCertificate(secretName, ns string) {
+	cert := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "cert-manager.io/v1",
+		"kind":       "Certificate",
+		"metadata":   map[string]interface{}{"name": secretName, "namespace": ns},
+		"spec":       map[string]interface{}{"secretName": secretName},
+	}}
+	s.ctx.AddObject("certificate-"+ns+"-"+secretName, cert)
+}
+
+// A cert-manager Certificate is the common way a listener's TLS Secret comes
+// to exist without ever being rendered as a Secret manifest itself: the
+// controller creates it from the Certificate object at apply time.
+func (s *DanglingCertificateRefTestSuite) TestPassesWhenACertManagerCertificateNamesTheSecret() {
+	s.addCertManagerCertificate("edge-cert", gatewayNS)
+	s.addGateway(terminatingListener("https", certRef("edge-cert", nil)))
+
+	s.expect()
+}
+
+// The Certificate has to actually name the Secret gwlint is looking for; one
+// naming something else does not vouch for an unrelated reference.
+func (s *DanglingCertificateRefTestSuite) TestDoesNotAcceptAnUnrelatedCertificate() {
+	s.addCertManagerCertificate("some-other-cert", gatewayNS)
+	s.addGateway(terminatingListener("https", certRef("edge-cert", nil)))
+
+	s.expect(want("https", "edge-cert"))
+}
+
+// A namespace described only by a cert-manager Certificate (no rendered
+// Secret at all) still counts as described, and the Certificate's own
+// secretName is what resolves the reference, not the fact that some Secret
+// exists in the namespace generally.
+func (s *DanglingCertificateRefTestSuite) TestCertManagerCertificateAloneDescribesTheNamespace() {
+	s.addCertManagerCertificate("edge-cert", gatewayNS)
+	s.addGateway(terminatingListener("https", certRef("missing-cert", nil)))
+
+	s.expect(want("https", "missing-cert"))
 }

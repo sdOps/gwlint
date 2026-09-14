@@ -4,10 +4,18 @@ import (
 	"golang.stackrox.io/kube-linter/pkg/k8sutil"
 	"golang.stackrox.io/kube-linter/pkg/lintcontext"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	gwobjectkinds "github.com/sdOps/gwlint/pkg/objectkinds"
 )
+
+// certManagerGroup is cert-manager's API group. Matched on group and kind
+// alone, not a specific version: cert-manager's Certificate has been served
+// at v1 for years, but older manifests still turn up at v1alpha2 or v1alpha3,
+// and none of gwlint's own code needs anything from the type beyond the two
+// fields read below.
+const certManagerGroup = "cert-manager.io"
 
 // SecretKind is what a listener certificateRef resolves to unless it says
 // otherwise, per Gateway API's default on SecretObjectReference.Kind.
@@ -92,19 +100,42 @@ func ResolvableCertificateKind(group, kind string) bool {
 	return group == "" && kind == SecretKind
 }
 
-// CertificateSecrets indexes every core Secret in the context, which is how a
-// check decides whether a listener certificateRef resolves to anything.
+// CertificateSecrets indexes every Secret a listener certificateRef can
+// resolve to: every core Secret in the context directly, plus every Secret a
+// cert-manager Certificate names as its spec.secretName in the same
+// namespace. cert-manager's controller creates that Secret at runtime from
+// the Certificate object, never as a chart-rendered manifest of its own, so a
+// render carrying the Certificate but not the Secret is not missing anything;
+// treating the certificateRef as dangling there would be gwlint's mistake,
+// not the manifest's.
 func CertificateSecrets(lintCtx lintcontext.LintContext) map[ObjectRef]struct{} {
 	found := make(map[ObjectRef]struct{})
 	for _, obj := range lintCtx.Objects() {
-		if _, ok := obj.K8sObject.(*corev1.Secret); !ok {
-			continue
+		switch typed := obj.K8sObject.(type) {
+		case *corev1.Secret:
+			found[ObjectRef{Kind: SecretKind, Namespace: typed.Namespace, Name: typed.Name}] = struct{}{}
+		case *unstructured.Unstructured:
+			if name, ok := certManagerSecretName(typed); ok {
+				found[ObjectRef{Kind: SecretKind, Namespace: typed.GetNamespace(), Name: name}] = struct{}{}
+			}
 		}
-		found[ObjectRef{
-			Kind:      SecretKind,
-			Namespace: obj.K8sObject.GetNamespace(),
-			Name:      obj.K8sObject.GetName(),
-		}] = struct{}{}
 	}
 	return found
+}
+
+// certManagerSecretName returns the Secret name a cert-manager Certificate
+// object will populate, and reports whether obj was such an object.
+// Certificate is not one of gwlint's registered kinds, so kube-linter's
+// decoder falls back to unstructured for it; gwlint reads the two fields it
+// needs directly rather than adding a dependency on cert-manager's own types.
+func certManagerSecretName(obj *unstructured.Unstructured) (string, bool) {
+	gvk := obj.GroupVersionKind()
+	if gvk.Group != certManagerGroup || gvk.Kind != "Certificate" {
+		return "", false
+	}
+	name, found, err := unstructured.NestedString(obj.Object, "spec", "secretName")
+	if err != nil || !found || name == "" {
+		return "", false
+	}
+	return name, true
 }

@@ -10,6 +10,13 @@
 // Secret. Certificates are routinely rendered by a different chart, or issued
 // into the cluster by cert-manager and never committed at all, so treating an
 // absent namespace as an absent Secret would flag half the Gateways people own.
+//
+// A cert-manager Certificate naming the same secretName counts as the Secret
+// existing, even where no Secret manifest is rendered at all: cert-manager's
+// controller creates that Secret at apply time from the Certificate object,
+// which is the normal way a Gateway gets its certificate. Reported by a real
+// chart that rendered the Certificate but never a literal Secret; see
+// gatewayapi.CertificateSecrets for the resolution.
 package danglingcertificateref
 
 import (
