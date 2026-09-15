@@ -164,7 +164,10 @@ jobs:
           ext=""
           [ "${{ matrix.goos }}" = "windows" ] && ext=".exe"
           name="gwlint-${{ needs.tag.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}$ext"
-          go build -ldflags "-X github.com/sdOps/gwlint/pkg/version.version=${{ needs.tag.outputs.version }}" -o "$name" ./cmd/gwlint
+          # -s -w: no one attaches a debugger to a downloaded release binary.
+          # Cuts it from ~72MB to ~50MB (issue #14). mise.toml's local build
+          # task deliberately keeps full symbols, for dlv/gdb during dev.
+          go build -ldflags "-s -w -X github.com/sdOps/gwlint/pkg/version.version=${{ needs.tag.outputs.version }}" -trimpath -o "$name" ./cmd/gwlint
           echo "artifact=$name" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
